@@ -1,8 +1,8 @@
-streamlit
+streamlit>=1.20.0
 pandas
 scikit-learn
 xgboost
-shap
+shap>=0.40
 matplotlib
 joblib
 numpy
