@@ -3,6 +3,7 @@ import numpy as np
 import joblib
 import shap
 import matplotlib.pyplot as plt
+import streamli.compents.v1 as components
 
 # 页面基本设置
 st.set_page_config(page_title="Nutritional Quality Classifier", layout="wide")
@@ -44,13 +45,17 @@ if st.sidebar.button("🧮 Predict"):
 
    # 显示 SHAP 力图
    st.subheader("📊 SHAP Force Plot (Model Explanation)")
-   shap_values = explainer(user_input)
+    shap_values = explainer(user_input)
 
-   with st.expander("Click to view SHAP force plot"):
-       st.markdown("This plot shows how each feature influences the model's prediction.")
-       fig, ax = plt.subplots(figsize=(15, 3))
-       shap.plots.force(shap_values[0], matplotlib=True, show=False)
-       st.pyplot(fig)
+    with st.expander("Click to view SHAP force plot"):
+        st.markdown("This plot shows how each feature influences the model's prediction.")
+        force_html = shap.force_plot(
+            explainer.expected_value[1] if isinstance(shap_values, list) else explainer.expected_value,
+            shap_values[1][0] if isinstance(shap_values, list) else shap_values[0],
+            user_input,
+            matplotlib=False
+        )
+        components.html(force_html.html(), height=300)
 
 # 页脚
 st.markdown("---")
