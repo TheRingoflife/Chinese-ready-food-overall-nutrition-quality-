@@ -5,7 +5,6 @@ import joblib
 import shap
 import matplotlib.pyplot as plt
 import streamlit.components.v1 as components
-from sklearn.preprocessing import StandardScaler
 
 # ===== 页面设置 =====
 st.set_page_config(page_title="Nutritional Quality Classifier", layout="wide")
@@ -19,7 +18,7 @@ def load_model():
 
 @st.cache_resource
 def load_scaler():
-    return joblib.load("scaler.pkl")  # 加载已保存的标准化器
+    return joblib.load("/mnt/data/scaler2.pkl")  # 加载已经保存的标准化器
 
 @st.cache_resource
 def load_background_data():
@@ -42,39 +41,36 @@ energy = st.sidebar.number_input("Energy (kJ/100g)", min_value=0.0, step=1.0)
 if st.sidebar.button("🧮 Predict"):
     # 1. 原始用户输入（DataFrame）
     user_input_raw = pd.DataFrame([{
-        'Energy': energy,
         'Protein': protein,
         'Sodium': sodium,
-        'Total fat': total_fat
+        'procef_4': procef_4,
+        'Total fat': total_fat,
+        'Energy': energy
     }])
 
-    # 2. 确保列顺序一致（与训练数据相同）
-    user_input_raw = user_input_raw[['Protein', 'Sodium', 'Total fat', 'Energy']]  # 确保顺序一致
-
-    # 3. 标准化四个变量
+    # 2. 标准化四个变量
     user_scaled_part = scaler.transform(user_input_raw)
     user_scaled_df = pd.DataFrame(user_scaled_part, columns=user_input_raw.columns)
 
-    # 4. 添加未标准化变量（procef_4）
+    # 3. 添加未标准化变量（procef_4）
     user_scaled_df['procef_4'] = procef_4
     user_scaled_df = user_scaled_df[['Protein', 'Sodium', 'procef_4', 'Total fat', 'Energy']]  # 确保列顺序一致
 
-    # 5. 模型预测
+    # 4. 模型预测
     prediction = model.predict(user_scaled_df)[0]
     prob = model.predict_proba(user_scaled_df)[0][1]
 
-    # 6. 展示结果
+    # 5. 展示结果
     st.subheader("🔍 Prediction Result")
     label = "✅ Healthy" if prediction == 1 else "⚠️ Unhealthy"
     st.markdown(f"**Prediction:** {label}")
     st.markdown(f"**Confidence (probability of being healthy):** `{prob:.2f}`")
 
-    # 7. 生成 SHAP 力图
+    # 6. 生成 SHAP 力图
     st.subheader("📊 SHAP Force Plot (Model Explanation)")
     with st.expander("Click to view SHAP force plot"):
         shap_values = explainer(user_scaled_df)
 
-        # 确保 SHAP 值为 Explanation 对象
         if not isinstance(shap_values, shap.Explanation):
             shap_values = shap.Explanation(
                 values=shap_values[1] if isinstance(shap_values, list) else shap_values,
