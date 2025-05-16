@@ -18,17 +18,15 @@ def load_model():
 
 @st.cache_resource
 def load_scaler():
-    return joblib.load("scaler.pkl")
+    return joblib.load("scaler.pkl")  # 只标准化四个变量
 
 @st.cache_resource
 def load_background_data():
-    return pd.read_pickle("background_data.pkl")  # 标准化后的DataFrame
+    return pd.read_pickle("background_data.pkl")  # 已标准化并包含全部五个变量
 
 model = load_model()
 scaler = load_scaler()
 background_data = load_background_data()
-
-# 初始化 SHAP explainer
 explainer = shap.Explainer(model, background_data)
 
 # ===== 侧边栏输入 =====
@@ -41,53 +39,53 @@ energy = st.sidebar.number_input("Energy (kJ/100g)", min_value=0.0, step=1.0)
 
 # ===== 模型预测 + SHAP 可解释性 =====
 if st.sidebar.button("🧮 Predict"):
-    # 用户输入 DataFrame
-    user_input_df = pd.DataFrame([{
+    # 1. 原始用户输入（DataFrame）
+    user_input_raw = pd.DataFrame([{
+        'Energy': energy,
         'Protein': protein,
         'Sodium': sodium,
-        'procef_4': procef_4,
-        'Total fat': total_fat,
-        'Energy': energy
+        'Total fat': total_fat
     }])
 
-    # 保证输入的特征顺序与 scaler 训练时一致
-    user_input_df = user_input_df.reindex(columns=scaler.feature_names_in_)
+    # 2. 标准化四个变量
+    user_scaled_part = scaler.transform(user_input_raw)
+    user_scaled_df = pd.DataFrame(user_scaled_part, columns=user_input_raw.columns)
 
-    # 标准化输入
-    user_input_scaled = scaler.transform(user_input_df)
+    # 3. 添加未标准化变量（procef_4）
+    user_scaled_df['procef_4'] = procef_4
+    user_scaled_df = user_scaled_df[['Protein', 'Sodium', 'procef_4', 'Total fat', 'Energy']]  # 确保列顺序一致
 
-    # 模型预测
-    prediction = model.predict(user_input_scaled)[0]
-    prob = model.predict_proba(user_input_scaled)[0][1]
+    # 4. 模型预测
+    prediction = model.predict(user_scaled_df)[0]
+    prob = model.predict_proba(user_scaled_df)[0][1]
 
-    # 显示结果
+    # 5. 展示结果
     st.subheader("🔍 Prediction Result")
     label = "✅ Healthy" if prediction == 1 else "⚠️ Unhealthy"
     st.markdown(f"**Prediction:** {label}")
     st.markdown(f"**Confidence (probability of being healthy):** `{prob:.2f}`")
 
-    # SHAP 力图解释
+    # 6. 生成 SHAP 力图
     st.subheader("📊 SHAP Force Plot (Model Explanation)")
     with st.expander("Click to view SHAP force plot"):
-        shap_values = explainer(user_input_scaled)
+        shap_values = explainer(user_scaled_df)
 
         if not isinstance(shap_values, shap.Explanation):
             shap_values = shap.Explanation(
                 values=shap_values[1] if isinstance(shap_values, list) else shap_values,
                 base_values=explainer.expected_value[1] if isinstance(explainer.expected_value, list) else explainer.expected_value,
-                data=user_input_scaled,
-                feature_names=user_input_df.columns.tolist()
+                data=user_scaled_df.values,
+                feature_names=user_scaled_df.columns.tolist()
             )
 
-        force_plot_html = shap.force_plot(
+        force_html = shap.force_plot(
             base_value=shap_values.base_values,
             shap_values=shap_values.values,
             features=shap_values.data,
             feature_names=shap_values.feature_names,
             matplotlib=False
         )
-
-        components.html(shap.getjs() + force_plot_html.html(), height=300)
+        components.html(shap.getjs() + force_html.html(), height=300)
 
 # ===== 页脚 =====
 st.markdown("---")
