@@ -12,7 +12,7 @@ st.markdown("This application uses a trained XGBoost model to classify whether a
 # 加载模型和背景数据
 @st.cache_resource
 def load_model():
-   model = joblib.load("xgboost_retrained_model.pkl")
+   model = joblib.load("XGBoost_retrained_model.pkl")
    return model
 
 @st.cache_resource
