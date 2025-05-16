@@ -18,7 +18,7 @@ def load_model():
 
 @st.cache_resource
 def load_scaler():
-    return joblib.load("/mnt/data/scaler2.pkl")  # 加载已经保存的标准化器
+    return joblib.load("scaler2.pkl")  # 加载已经保存的标准化器
 
 @st.cache_resource
 def load_background_data():
