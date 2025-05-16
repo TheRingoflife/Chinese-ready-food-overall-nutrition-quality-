@@ -70,6 +70,7 @@ if st.sidebar.button("🧮 Predict"):
     with st.expander("Click to view SHAP force plot"):
         shap_values = explainer(user_scaled_df)
 
+        # 确保 SHAP 值为 Explanation 对象
         if not isinstance(shap_values, shap.Explanation):
             shap_values = shap.Explanation(
                 values=shap_values[1] if isinstance(shap_values, list) else shap_values,
@@ -90,3 +91,4 @@ if st.sidebar.button("🧮 Predict"):
 # ===== 页脚 =====
 st.markdown("---")
 st.markdown("Developed using Streamlit and XGBoost · For research use only.")
+
