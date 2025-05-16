@@ -5,6 +5,7 @@ import joblib
 import shap
 import matplotlib.pyplot as plt
 import streamlit.components.v1 as components
+from sklearn.preprocessing import StandardScaler
 
 # ===== 页面设置 =====
 st.set_page_config(page_title="Nutritional Quality Classifier", layout="wide")
@@ -18,7 +19,7 @@ def load_model():
 
 @st.cache_resource
 def load_scaler():
-    return joblib.load("scaler1.pkl")  # 只标准化四个变量
+    return joblib.load("scaler.pkl")  # 加载已保存的标准化器
 
 @st.cache_resource
 def load_background_data():
@@ -47,25 +48,28 @@ if st.sidebar.button("🧮 Predict"):
         'Total fat': total_fat
     }])
 
-    # 2. 标准化四个变量
+    # 2. 确保列顺序一致（与训练数据相同）
+    user_input_raw = user_input_raw[['Protein', 'Sodium', 'Total fat', 'Energy']]  # 确保顺序一致
+
+    # 3. 标准化四个变量
     user_scaled_part = scaler.transform(user_input_raw)
     user_scaled_df = pd.DataFrame(user_scaled_part, columns=user_input_raw.columns)
 
-    # 3. 添加未标准化变量（procef_4）
+    # 4. 添加未标准化变量（procef_4）
     user_scaled_df['procef_4'] = procef_4
     user_scaled_df = user_scaled_df[['Protein', 'Sodium', 'procef_4', 'Total fat', 'Energy']]  # 确保列顺序一致
 
-    # 4. 模型预测
+    # 5. 模型预测
     prediction = model.predict(user_scaled_df)[0]
     prob = model.predict_proba(user_scaled_df)[0][1]
 
-    # 5. 展示结果
+    # 6. 展示结果
     st.subheader("🔍 Prediction Result")
     label = "✅ Healthy" if prediction == 1 else "⚠️ Unhealthy"
     st.markdown(f"**Prediction:** {label}")
     st.markdown(f"**Confidence (probability of being healthy):** `{prob:.2f}`")
 
-    # 6. 生成 SHAP 力图
+    # 7. 生成 SHAP 力图
     st.subheader("📊 SHAP Force Plot (Model Explanation)")
     with st.expander("Click to view SHAP force plot"):
         shap_values = explainer(user_scaled_df)
@@ -91,4 +95,3 @@ if st.sidebar.button("🧮 Predict"):
 # ===== 页脚 =====
 st.markdown("---")
 st.markdown("Developed using Streamlit and XGBoost · For research use only.")
-
