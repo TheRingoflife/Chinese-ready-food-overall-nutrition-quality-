@@ -18,7 +18,7 @@ def load_model():
 
 @st.cache_resource
 def load_scaler():
-    return joblib.load("scaler.pkl")  # 只标准化四个变量
+    return joblib.load("scaler1.pkl")  # 只标准化四个变量
 
 @st.cache_resource
 def load_background_data():
