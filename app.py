@@ -22,7 +22,7 @@ def load_scaler():
 
 @st.cache_resource
 def load_background_data():
-    return pd.read_pickle("background_data.npy")
+    return np.load("background_data.npy")  # 使用 np.load 加载 .npy 文件
 
 model = load_model()
 scaler = load_scaler()
@@ -36,7 +36,7 @@ sodium = st.sidebar.number_input("Sodium (mg/100g)", min_value=0.0, step=1.0)
 procef_4 = st.sidebar.selectbox("Is Ultra-Processed? (procef_4)", [0, 1])
 total_fat = st.sidebar.number_input("Total Fat (g/100g)", min_value=0.0, step=0.1)
 energy = st.sidebar.number_input("Energy (kJ/100g)", min_value=0.0, step=1.0)
-weight = st.sidebar.number_input("weight (g)", min_value=0.0, step=1.0)
+weight = st.sidebar.number_input("Weight (g)", min_value=0.0, step=1.0)
 
 # ===== 模型预测 + SHAP 可解释性 =====
 if st.sidebar.button("🧮 Predict"):
@@ -56,16 +56,15 @@ if st.sidebar.button("🧮 Predict"):
         st.stop()
     # 3. 按顺序组装DataFrame
     user_input_for_scaler = pd.DataFrame([[input_dict[feat] for feat in expected_columns]], columns=expected_columns)
-    # 4. 调试输出（可选，部署时可删）
-    # st.write("scaler expects:", expected_columns)
-    # st.write("your df columns:", user_input_for_scaler.columns.tolist())
-    # 5. 标准化
+    # 4. 标准化
     user_scaled_part = scaler.transform(user_input_for_scaler)
     user_scaled_df = pd.DataFrame(user_scaled_part, columns=expected_columns)
-    # 6. 添加未标准化的procef_4
+    # 5. 添加未标准化的procef_4
     user_scaled_df['procef_4'] = procef_4
+    # 6. 添加 weight 列，确保它在模型输入中
+    user_scaled_df['weight'] = weight
     # 7. 按模型需要的顺序排列
-    final_columns = ['Sodium', 'Protein', 'Energy', 'procef_4', 'Total fat','weight']
+    final_columns = ['Sodium', 'Protein', 'Energy', 'procef_4', 'Total fat', 'weight']
     user_scaled_df = user_scaled_df[final_columns]
     # 8. 预测
     prediction = model.predict(user_scaled_df)[0]
@@ -79,9 +78,11 @@ if st.sidebar.button("🧮 Predict"):
     st.subheader("📊 SHAP Force Plot (Model Explanation)")
     with st.expander("Click to view SHAP force plot"):
         shap_values = explainer(user_scaled_df)
+        if isinstance(shap_values, list):  # 如果返回的是列表
+            shap_values = shap_values[1]
         if not isinstance(shap_values, shap.Explanation):
             shap_values = shap.Explanation(
-                values=shap_values[1] if isinstance(shap_values, list) else shap_values,
+                values=shap_values,
                 base_values=explainer.expected_value[1] if isinstance(explainer.expected_value, list) else explainer.expected_value,
                 data=user_scaled_df.values,
                 feature_names=user_scaled_df.columns.tolist()
@@ -93,8 +94,9 @@ if st.sidebar.button("🧮 Predict"):
             feature_names=shap_values.feature_names,
             matplotlib=False
         )
-        components.html(shap.getjs() + force_html.html(), height=300)
+        components.html(shap.getjs() + force_html.html(), height=400)  # 增加高度
 
 # ===== 页脚 =====
 st.markdown("---")
 st.markdown("Developed using Streamlit and XGBoost · For research use only.")
+
