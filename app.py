@@ -18,11 +18,11 @@ def load_model():
 
 @st.cache_resource
 def load_scaler():
-    return joblib.load("scaler2.pkl")  # 加载已经保存的标准化器
+    return joblib.load("scaler2.pkl")
 
 @st.cache_resource
 def load_background_data():
-    return pd.read_pickle("background_data.pkl")  # 已标准化并包含全部五个变量
+    return pd.read_pickle("background_data.npy")
 
 model = load_model()
 scaler = load_scaler()
@@ -36,6 +36,7 @@ sodium = st.sidebar.number_input("Sodium (mg/100g)", min_value=0.0, step=1.0)
 procef_4 = st.sidebar.selectbox("Is Ultra-Processed? (procef_4)", [0, 1])
 total_fat = st.sidebar.number_input("Total Fat (g/100g)", min_value=0.0, step=0.1)
 energy = st.sidebar.number_input("Energy (kJ/100g)", min_value=0.0, step=1.0)
+weight = st.sidebar.number_input("weight (g)", min_value=0.0, step=1.0)
 
 # ===== 模型预测 + SHAP 可解释性 =====
 if st.sidebar.button("🧮 Predict"):
@@ -45,7 +46,8 @@ if st.sidebar.button("🧮 Predict"):
         "Protein": protein,
         "Sodium": sodium,
         "Total fat": total_fat,
-        "Energy": energy
+        "Energy": energy,
+        "weight": weight
     }
     # 2. 检查是否缺失
     missing = [feat for feat in expected_columns if input_dict.get(feat, None) in [None, ""]]
@@ -63,7 +65,7 @@ if st.sidebar.button("🧮 Predict"):
     # 6. 添加未标准化的procef_4
     user_scaled_df['procef_4'] = procef_4
     # 7. 按模型需要的顺序排列
-    final_columns = ['Protein', 'Sodium', 'procef_4', 'Total fat', 'Energy']
+    final_columns = ['Sodium', 'Protein', 'Energy', 'procef_4', 'Total fat','weight']
     user_scaled_df = user_scaled_df[final_columns]
     # 8. 预测
     prediction = model.predict(user_scaled_df)[0]
