@@ -262,30 +262,8 @@ if st.sidebar.button(texts['predict_button'], type="primary", use_container_widt
         </div>
         """, unsafe_allow_html=True)
         
-        # 4. 特征重要性
-        st.markdown(f"## {texts['feature_importance']}")
         
-        if hasattr(model, 'steps'):
-            final_model = model.steps[-1][1]
-            if hasattr(final_model, 'feature_importances_'):
-                feature_importance = final_model.feature_importances_
-                features = texts['chart_feature_names']  # 使用英文特征名用于图表
-                
-                fig, ax = plt.subplots(figsize=(10, 6))
-                bars = ax.barh(features, feature_importance, color=['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4'])
-                ax.set_xlabel('Importance', fontsize=12)
-                ax.set_title('Feature Importance Analysis', fontsize=14, fontweight='bold')
-                
-                for i, bar in enumerate(bars):
-                    width = bar.get_width()
-                    ax.text(width, bar.get_y() + bar.get_height()/2, 
-                            f'{width:.3f}', ha='left', va='center', fontweight='bold')
-                
-                plt.tight_layout()
-                st.pyplot(fig)
-                plt.close()
-        
-        # 5. SHAP力图
+        # 4. SHAP力图
         st.markdown(f"## {texts['shap_plot']}")
         
         try:
