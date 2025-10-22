@@ -127,31 +127,6 @@ if st.sidebar.button("🧮 Predict"):
                     st.pyplot(plt.gcf())
                     plt.close()
                 
-                # SHAP Force Plot (力图)
-                st.subheader("📊 SHAP Force Plot (Model Explanation)")
-                with st.expander("Click to view SHAP force plot"):
-                    if isinstance(shap_values, list):  # 如果返回的是列表
-                        shap_values_force = shap_values[1]
-                    else:
-                        shap_values_force = shap_values
-                    
-                    if not isinstance(shap_values_force, shap.Explanation):
-                        shap_values_force = shap.Explanation(
-                            values=shap_values_force,
-                            base_values=explainer.expected_value[1] if isinstance(explainer.expected_value, list) else explainer.expected_value,
-                            data=user_scaled_df.values,
-                            feature_names=user_scaled_df.columns.tolist()
-                        )
-                    
-                    force_html = shap.force_plot(
-                        base_value=shap_values_force.base_values,
-                        shap_values=shap_values_force.values,
-                        features=shap_values_force.data,
-                        feature_names=shap_values_force.feature_names,
-                        matplotlib=False
-                    )
-                    components.html(shap.getjs() + force_html.html(), height=400)
-                
                 # 特征影响分析表格
                 st.markdown("#### Feature Impact Analysis")
                 feature_impact = pd.DataFrame({
