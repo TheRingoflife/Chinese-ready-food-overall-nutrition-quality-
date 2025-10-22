@@ -59,7 +59,7 @@ st.markdown("""
 @st.cache_resource
 def load_model():
     try:
-        return joblib.load("final_model.pkl")
+        return joblib.load("XGBoost_retrained_model.pkl")
     except FileNotFoundError:
         st.error("❌ Model file not found. Please ensure 'XGBoost_retrained_model.pkl' exists.")
         return None
