@@ -6,6 +6,28 @@ import shap
 import matplotlib.pyplot as plt
 import streamlit.components.v1 as components
 import warnings
+import os
+
+# 添加可能缺失的依赖
+try:
+    from sklearn.preprocessing import StandardScaler, OneHotEncoder
+    from sklearn.model_selection import train_test_split, cross_validate
+    from sklearn.linear_model import Lasso, LogisticRegression, SGDClassifier
+    from sklearn.neighbors import KNeighborsClassifier
+    from sklearn.tree import DecisionTreeClassifier
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.neural_network import MLPClassifier
+    from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+    from imblearn.pipeline import Pipeline
+    from imblearn.combine import SMOTETomek, SMOTEENN
+    from xgboost import XGBClassifier
+    from lightgbm import LGBMClassifier
+except ImportError as e:
+    st.error(f"Missing dependency: {e}")
+    st.stop()
+
+# 忽略警告
+warnings.filterwarnings('ignore')
 
 # 忽略警告
 warnings.filterwarnings('ignore')
