@@ -80,8 +80,9 @@ if st.sidebar.button("🧮 Predict"):
                             f'{width:.3f}', ha='left', va='center')
                 
                 st.pyplot(fig)
+                plt.close()  # 关闭图形释放内存
         
-        # 5. SHAP力图 - 使用正确的方法
+        # 5. SHAP力图 - 修复布局问题
         st.subheader("📊 SHAP Force Plot")
         
         try:
@@ -109,12 +110,15 @@ if st.sidebar.button("🧮 Predict"):
                 shap_vals = shap_values[0, :]
                 base_val = expected_value[0]
             
-            # 显示 SHAP 值信息
-            st.write(f"Base value: {base_val:.4f}")
-            st.write(f"SHAP values: {shap_vals}")
+            # 显示 SHAP 值信息（使用列布局避免重叠）
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write(f"**Base value:** {base_val:.4f}")
+            with col2:
+                st.write(f"**Prediction:** {base_val + shap_vals.sum():.4f}")
             
-            # 创建真正的 SHAP 力图
-            with st.expander("Click to view SHAP force plot"):
+            # 创建 SHAP 力图
+            with st.expander("Click to view SHAP force plot", expanded=True):
                 # 方法1：使用 HTML 版本
                 try:
                     force_plot = shap.force_plot(
@@ -135,7 +139,7 @@ if st.sidebar.button("🧮 Predict"):
                     
                     # 方法2：使用 matplotlib 版本
                     try:
-                        fig, ax = plt.subplots(figsize=(12, 6))
+                        fig, ax = plt.subplots(figsize=(14, 8))  # 增大图形尺寸
                         
                         # 创建自定义的力图
                         features = ['Protein', 'Sodium', 'Energy', 'procef_4']
@@ -145,17 +149,32 @@ if st.sidebar.button("🧮 Predict"):
                         colors = ['red' if x < 0 else 'blue' for x in shap_vals]
                         bars = ax.barh(features, shap_vals, color=colors, alpha=0.7)
                         
-                        # 添加特征值标签
+                        # 添加特征值标签（调整位置避免重叠）
                         for i, (bar, val) in enumerate(zip(bars, feature_values)):
                             width = bar.get_width()
-                            ax.text(width, bar.get_y() + bar.get_height()/2, 
-                                    f'{val:.2f}', ha='left' if width > 0 else 'right', va='center')
+                            # 调整标签位置
+                            if width > 0:
+                                ax.text(width + 0.01, bar.get_y() + bar.get_height()/2, 
+                                        f'{val:.2f}', ha='left', va='center', fontsize=10)
+                            else:
+                                ax.text(width - 0.01, bar.get_y() + bar.get_height()/2, 
+                                        f'{val:.2f}', ha='right', va='center', fontsize=10)
+                        
+                        # 添加 SHAP 值标签
+                        for i, (bar, shap_val) in enumerate(zip(bars, shap_vals)):
+                            width = bar.get_width()
+                            # 在条形图内部显示 SHAP 值
+                            ax.text(width/2, bar.get_y() + bar.get_height()/2, 
+                                    f'{shap_val:.3f}', ha='center', va='center', 
+                                    color='white', fontweight='bold', fontsize=9)
                         
                         ax.axvline(x=0, color='black', linestyle='-', alpha=0.3)
-                        ax.set_xlabel('SHAP Value')
-                        ax.set_title('SHAP Force Plot (Custom)')
+                        ax.set_xlabel('SHAP Value', fontsize=12)
+                        ax.set_title('SHAP Force Plot (Custom)', fontsize=14, pad=20)
                         ax.grid(True, alpha=0.3)
                         
+                        # 调整布局
+                        plt.tight_layout()
                         st.pyplot(fig)
                         plt.close()
                         st.success("✅ SHAP force plot created (Custom version)!")
