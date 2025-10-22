@@ -65,7 +65,7 @@ if st.sidebar.button("🧮 Predict"):
         st.markdown(f"**Prediction:** {label}")
         st.markdown(f"**Confidence:** `{prob:.2f}`")
         
-        # 4. 特征重要性
+        # 4. 特征重要性 - 调整大小
         st.subheader("📊 Feature Importance")
         
         if hasattr(model, 'steps'):
@@ -74,7 +74,7 @@ if st.sidebar.button("🧮 Predict"):
                 feature_importance = final_model.feature_importances_
                 features = ['Protein', 'Sodium', 'Energy', 'procef_4']
                 
-                fig, ax = plt.subplots(figsize=(10, 6))
+                fig, ax = plt.subplots(figsize=(8, 4))  # 减小尺寸
                 bars = ax.barh(features, feature_importance)
                 ax.set_xlabel('Importance')
                 ax.set_title('Feature Importance')
@@ -84,6 +84,7 @@ if st.sidebar.button("🧮 Predict"):
                     ax.text(width, bar.get_y() + bar.get_height()/2, 
                             f'{width:.3f}', ha='left', va='center')
                 
+                plt.tight_layout()
                 st.pyplot(fig)
                 plt.close()
         
@@ -142,9 +143,9 @@ if st.sidebar.button("🧮 Predict"):
                 except Exception as e:
                     st.warning(f"HTML version failed: {e}")
                     
-                    # 方法2：创建更清晰的 matplotlib 版本
+                    # 方法2：创建更清晰的 matplotlib 版本 - 调整大小
                     try:
-                        fig, ax = plt.subplots(figsize=(14, 8))
+                        fig, ax = plt.subplots(figsize=(12, 6))  # 减小尺寸
                         
                         # 创建清晰的力图
                         features = ['Protein', 'Sodium', 'Energy', 'procef_4']
@@ -161,22 +162,22 @@ if st.sidebar.button("🧮 Predict"):
                             # 在条形图内部显示 SHAP 值
                             ax.text(width/2, bar.get_y() + bar.get_height()/2, 
                                     f'SHAP: {shap_val:.3f}', ha='center', va='center', 
-                                    color='white', fontweight='bold', fontsize=11)
+                                    color='white', fontweight='bold', fontsize=10)  # 减小字体
                             
                             # 在条形图外部显示特征值
                             if width > 0:
                                 ax.text(width + 0.01, bar.get_y() + bar.get_height()/2, 
                                         f'Value: {feature_val:.2f}', ha='left', va='center', 
-                                        fontsize=10, bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgray", alpha=0.7))
+                                        fontsize=9, bbox=dict(boxstyle="round,pad=0.2", facecolor="lightgray", alpha=0.7))  # 减小字体和padding
                             else:
                                 ax.text(width - 0.01, bar.get_y() + bar.get_height()/2, 
                                         f'Value: {feature_val:.2f}', ha='right', va='center', 
-                                        fontsize=10, bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgray", alpha=0.7))
+                                        fontsize=9, bbox=dict(boxstyle="round,pad=0.2", facecolor="lightgray", alpha=0.7))  # 减小字体和padding
                         
                         # 添加图例
                         ax.axvline(x=0, color='black', linestyle='-', alpha=0.3, linewidth=2)
-                        ax.set_xlabel('SHAP Value', fontsize=12)
-                        ax.set_title('SHAP Force Plot - Feature Contributions', fontsize=16, pad=20)
+                        ax.set_xlabel('SHAP Value', fontsize=11)  # 减小字体
+                        ax.set_title('SHAP Force Plot - Feature Contributions', fontsize=14, pad=15)  # 减小字体和padding
                         ax.grid(True, alpha=0.3)
                         
                         # 添加图例说明
@@ -184,7 +185,7 @@ if st.sidebar.button("🧮 Predict"):
                             plt.Rectangle((0,0),1,1, facecolor='blue', alpha=0.7, label='Positive Impact (Higher Health)'),
                             plt.Rectangle((0,0),1,1, facecolor='red', alpha=0.7, label='Negative Impact (Lower Health)')
                         ]
-                        ax.legend(handles=legend_elements, loc='upper right', fontsize=10)
+                        ax.legend(handles=legend_elements, loc='upper right', fontsize=9)  # 减小字体
                         
                         plt.tight_layout()
                         st.pyplot(fig)
@@ -211,8 +212,8 @@ if st.sidebar.button("🧮 Predict"):
                         
                         st.dataframe(shap_df, use_container_width=True)
                         
-                        # 创建简单的条形图
-                        fig, ax = plt.subplots(figsize=(12, 6))
+                        # 创建简单的条形图 - 调整大小
+                        fig, ax = plt.subplots(figsize=(10, 5))  # 减小尺寸
                         bars = ax.barh(shap_df['Feature'], shap_df['SHAP Value'], 
                                      color=['red' if x < 0 else 'blue' for x in shap_df['SHAP Value']], alpha=0.7)
                         
@@ -220,11 +221,11 @@ if st.sidebar.button("🧮 Predict"):
                         for i, (bar, val) in enumerate(zip(bars, shap_df['SHAP Value'])):
                             width = bar.get_width()
                             ax.text(width, bar.get_y() + bar.get_height()/2, 
-                                    f'{val:.3f}', ha='left' if width > 0 else 'right', va='center')
+                                    f'{val:.3f}', ha='left' if width > 0 else 'right', va='center', fontsize=9)  # 减小字体
                         
                         ax.axvline(x=0, color='black', linestyle='-', alpha=0.3)
-                        ax.set_xlabel('SHAP Value')
-                        ax.set_title('SHAP Values by Feature')
+                        ax.set_xlabel('SHAP Value', fontsize=11)  # 减小字体
+                        ax.set_title('SHAP Values by Feature', fontsize=13)  # 减小字体
                         ax.grid(True, alpha=0.3)
                         
                         plt.tight_layout()
