@@ -5,6 +5,10 @@ import joblib
 import shap
 import matplotlib.pyplot as plt
 import streamlit.components.v1 as components
+import warnings
+
+# 忽略警告
+warnings.filterwarnings('ignore', category=UserWarning, message='.*ntree_limit.*')
 
 # ===== 页面设置 =====
 st.set_page_config(page_title="Nutritional Quality Classifier", layout="wide")
@@ -15,7 +19,16 @@ st.markdown("This app uses a trained XGBoost model to classify whether a ready-t
 @st.cache_resource
 def load_model():
     try:
-        return joblib.load("XGBoost_retrained_model.pkl")
+        model = joblib.load("XGBoost_retrained_model.pkl")
+        
+        # 修复 XGBoost base_score 问题
+        if hasattr(model, 'steps'):
+            final_model = model.steps[-1][1]
+            if hasattr(final_model, 'get_booster'):
+                booster = final_model.get_booster()
+                booster.set_param({'base_score': 0.5})
+        
+        return model
     except Exception as e:
         st.error(f"Model loading failed: {e}")
         return None
@@ -65,7 +78,7 @@ if st.sidebar.button("🧮 Predict"):
         st.markdown(f"**Prediction:** {label}")
         st.markdown(f"**Confidence:** `{prob:.2f}`")
         
-        # 4. 特征重要性
+        # 4. 特征重要性 - 调整大小
         st.subheader("📊 Feature Importance")
         
         if hasattr(model, 'steps'):
@@ -74,7 +87,7 @@ if st.sidebar.button("🧮 Predict"):
                 feature_importance = final_model.feature_importances_
                 features = ['Protein', 'Sodium', 'Energy', 'procef_4']
                 
-                fig, ax = plt.subplots(figsize=(10, 6))
+                fig, ax = plt.subplots(figsize=(8, 4))
                 bars = ax.barh(features, feature_importance)
                 ax.set_xlabel('Importance')
                 ax.set_title('Feature Importance')
@@ -84,16 +97,24 @@ if st.sidebar.button("🧮 Predict"):
                     ax.text(width, bar.get_y() + bar.get_height()/2, 
                             f'{width:.3f}', ha='left', va='center')
                 
+                plt.tight_layout()
                 st.pyplot(fig)
                 plt.close()
         
-        # 5. SHAP力图 - 参考您的代码设置
+        # 5. SHAP力图 - 修复 base_score 问题
         st.subheader("📊 SHAP Force Plot")
         
         try:
-            # 创建背景数据
-            np.random.seed(42)
-            background_data = np.random.normal(0, 1, (100, 4)).astype(float)
+            # 获取最终模型
+            if hasattr(model, 'steps'):
+                final_model = model.steps[-1][1]
+            else:
+                final_model = model
+            
+            # 确保 base_score 是 float
+            if hasattr(final_model, 'get_booster'):
+                booster = final_model.get_booster()
+                booster.set_param({'base_score': 0.5})
             
             # 使用 TreeExplainer
             explainer = shap.TreeExplainer(final_model)
@@ -102,11 +123,11 @@ if st.sidebar.button("🧮 Predict"):
             # 创建 SHAP 力图
             with st.expander("Click to view SHAP force plot", expanded=True):
                 try:
-                    # 参考您的代码设置
-                    plt.figure(figsize=(20, 3))
+                    # 调整尺寸，不要太大
+                    plt.figure(figsize=(12, 2))
                     shap.force_plot(explainer.expected_value, shap_values[0],
                                    user_scaled_df.iloc[0], matplotlib=True, show=False)
-                    plt.title('SHAP Force Plot - Current Prediction', fontsize=16, fontweight='bold')
+                    plt.title('SHAP Force Plot - Current Prediction', fontsize=14, fontweight='bold')
                     plt.tight_layout()
                     st.pyplot(plt)
                     plt.close()
