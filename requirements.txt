@@ -9,3 +9,4 @@ lightgbm
 imbalanced-learn
 scikit-optimize
 shap
+plotly
