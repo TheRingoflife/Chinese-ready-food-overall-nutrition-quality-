@@ -34,7 +34,11 @@ def load_scaler():
 @st.cache_resource
 def load_background_data():
     try:
-        return np.load("background_data.npy")
+        data = np.load("background_data.npy")
+        # 确保背景数据是数值格式
+        if data.dtype == object:
+            data = data.astype(float)
+        return data
     except Exception as e:
         st.warning(f"Background data loading failed: {e}")
         np.random.seed(42)
@@ -52,6 +56,7 @@ if model is None or scaler is None:
 st.info(f"Model type: {type(model).__name__}")
 st.info(f"Scaler features: {len(scaler.feature_names_in_) if hasattr(scaler, 'feature_names_in_') else 'Unknown'}")
 st.info(f"Background data shape: {background_data.shape}")
+st.info(f"Background data type: {background_data.dtype}")
 
 # ===== 侧边栏输入 =====
 st.sidebar.header("🔢 Input Variables")
@@ -64,47 +69,59 @@ procef_4 = st.sidebar.selectbox("Is Ultra-Processed? (procef_4)", [0, 1])
 if st.sidebar.button("🧮 Predict"):
     try:
         # 1. 准备输入数据
-        input_data = np.array([[protein, sodium, energy, procef_4]])
+        input_data = np.array([[protein, sodium, energy, procef_4]], dtype=float)
         
         # 2. 标准化
         input_scaled = scaler.transform(input_data)
         
-        # 3. 创建DataFrame
+        # 3. 创建DataFrame并确保数据格式正确
         user_scaled_df = pd.DataFrame(input_scaled, columns=['Protein', 'Sodium', 'Energy', 'procef_4'])
         
-        # 4. 预测
+        # 4. 强制转换为数值格式
+        for col in user_scaled_df.columns:
+            user_scaled_df[col] = pd.to_numeric(user_scaled_df[col], errors='coerce')
+        
+        # 检查是否有 NaN 值
+        if user_scaled_df.isnull().any().any():
+            st.warning("⚠️ Found NaN values, filling with 0")
+            user_scaled_df = user_scaled_df.fillna(0)
+        
+        # 5. 预测
         prediction = model.predict(user_scaled_df)[0]
         prob = model.predict_proba(user_scaled_df)[0][1]
         
-        # 5. 展示结果
+        # 6. 展示结果
         st.subheader("🔍 Prediction Result")
         label = "✅ Healthy" if prediction == 1 else "⚠️ Unhealthy"
         st.markdown(f"**Prediction:** {label}")
         st.markdown(f"**Confidence (probability of being healthy):** `{prob:.2f}`")
         
-        # 6. 显示输入数据
+        # 7. 显示输入数据
         st.subheader("📊 Input Data")
         st.dataframe(user_scaled_df, use_container_width=True)
         
-        # 7. SHAP力图
+        # 8. SHAP力图 - 完全重写的版本
         st.subheader("📊 SHAP Force Plot")
         
         try:
-            # 方法1：使用 TreeExplainer
+            # 方法1：使用 TreeExplainer（处理 Pipeline）
             if hasattr(model, 'steps'):
                 st.write("🔍 Detected Pipeline model, extracting final model...")
                 final_model = model.steps[-1][1]
                 st.write(f"Final model type: {type(final_model).__name__}")
                 
+                # 确保数据是 numpy 数组且为 float 类型
+                data_for_shap = user_scaled_df.values.astype(float)
+                
                 explainer = shap.TreeExplainer(final_model)
-                shap_values = explainer.shap_values(user_scaled_df)
+                shap_values = explainer.shap_values(data_for_shap)
                 
                 with st.expander("Click to view SHAP force plot"):
                     fig, ax = plt.subplots(figsize=(12, 6))
                     shap.force_plot(
                         explainer.expected_value,
                         shap_values[0],
-                        user_scaled_df.iloc[0],
+                        data_for_shap[0],
                         feature_names=['Protein', 'Sodium', 'Energy', 'procef_4'],
                         matplotlib=True,
                         show=False
@@ -113,15 +130,18 @@ if st.sidebar.button("🧮 Predict"):
                     plt.close()
                     
             else:
+                # 如果不是 Pipeline
+                data_for_shap = user_scaled_df.values.astype(float)
+                
                 explainer = shap.TreeExplainer(model)
-                shap_values = explainer.shap_values(user_scaled_df)
+                shap_values = explainer.shap_values(data_for_shap)
                 
                 with st.expander("Click to view SHAP force plot"):
                     fig, ax = plt.subplots(figsize=(12, 6))
                     shap.force_plot(
                         explainer.expected_value,
                         shap_values[0],
-                        user_scaled_df.iloc[0],
+                        data_for_shap[0],
                         feature_names=['Protein', 'Sodium', 'Energy', 'procef_4'],
                         matplotlib=True,
                         show=False
@@ -134,22 +154,44 @@ if st.sidebar.button("🧮 Predict"):
         except Exception as e:
             st.warning(f"SHAP TreeExplainer failed: {e}")
             
-            # 方法2：使用 predict_proba 函数
+            # 方法2：使用简化的 SHAP 方法
             try:
-                st.info("Trying alternative SHAP method with predict_proba...")
+                st.info("Trying simplified SHAP method...")
                 
+                # 创建完全数值化的背景数据
                 np.random.seed(42)
-                adjusted_background = np.random.normal(0, 1, (200, 4))
+                clean_background = np.random.normal(0, 1, (100, 4)).astype(float)
                 
-                explainer = shap.Explainer(model.predict_proba, adjusted_background)
-                shap_values = explainer(user_scaled_df)
+                # 确保输入数据是 float 类型
+                clean_input = user_scaled_df.values.astype(float)
+                
+                # 使用简化的 SHAP 方法
+                explainer = shap.Explainer(model, clean_background)
+                shap_values = explainer(clean_input)
+                
+                # 检查 shap_values 的结构
+                st.write(f"SHAP values type: {type(shap_values)}")
+                st.write(f"SHAP values shape: {shap_values.values.shape if hasattr(shap_values, 'values') else 'No values attribute'}")
                 
                 with st.expander("Click to view SHAP force plot"):
                     fig, ax = plt.subplots(figsize=(12, 6))
+                    
+                    # 处理不同的 SHAP 值格式
+                    if hasattr(shap_values, 'values'):
+                        if len(shap_values.values.shape) == 3:  # 多分类
+                            shap_vals = shap_values.values[0, :, 1]  # 健康类别
+                            base_val = explainer.expected_value[1]
+                        else:  # 二分类
+                            shap_vals = shap_values.values[0, :]
+                            base_val = explainer.expected_value
+                    else:
+                        shap_vals = shap_values[0, :]
+                        base_val = explainer.expected_value
+                    
                     shap.force_plot(
-                        explainer.expected_value[1],
-                        shap_values.values[0, :, 1],
-                        user_scaled_df.iloc[0],
+                        base_val,
+                        shap_vals,
+                        clean_input[0],
                         feature_names=['Protein', 'Sodium', 'Energy', 'procef_4'],
                         matplotlib=True,
                         show=False
@@ -157,15 +199,16 @@ if st.sidebar.button("🧮 Predict"):
                     st.pyplot(fig)
                     plt.close()
                     
-                st.success("✅ SHAP force plot created with predict_proba method!")
+                st.success("✅ SHAP force plot created with simplified method!")
                 
             except Exception as e2:
-                st.error(f"All SHAP methods failed: {e2}")
-                st.info("💡 SHAP explanation is not available for this model type.")
+                st.warning(f"Simplified SHAP method failed: {e2}")
                 
-                # 显示特征重要性作为替代
+                # 方法3：只显示特征重要性
+                st.info("Falling back to feature importance...")
+                
                 if hasattr(model, 'feature_importances_'):
-                    st.subheader("📊 Feature Importance (Alternative)")
+                    st.subheader("📊 Feature Importance")
                     feature_importance = model.feature_importances_
                     features = ['Protein', 'Sodium', 'Energy', 'procef_4']
                     
@@ -180,6 +223,8 @@ if st.sidebar.button("🧮 Predict"):
                                 f'{width:.3f}', ha='left', va='center')
                     
                     st.pyplot(fig)
+                else:
+                    st.info("💡 Neither SHAP nor feature importance is available for this model type.")
             
     except Exception as e:
         st.error(f"Prediction failed: {e}")
