@@ -11,37 +11,11 @@ st.set_page_config(page_title="Nutritional Quality Classifier", layout="wide")
 st.title("🍱 Predicting Nutritional Healthiness of Ready Food")
 st.markdown("This app uses a trained XGBoost model to classify whether a ready-to-eat food is **healthy**, based on simplified input features.")
 
-# 显示 SHAP 版本
-st.info(f"🔍 SHAP version: {shap.__version__}")
-
-# ===== 加载模型、标准化器和背景数据 =====
+# ===== 加载模型 =====
 @st.cache_resource
 def load_model():
     try:
-        model = joblib.load("XGBoost_retrained_model.pkl")
-        
-        # 更彻底的 base_score 修复
-        if hasattr(model, 'steps'):
-            final_model = model.steps[-1][1]
-            if hasattr(final_model, 'get_booster'):
-                booster = final_model.get_booster()
-                # 获取当前参数
-                current_params = booster.get_dump(dump_format='json')
-                
-                # 强制设置 base_score
-                booster.set_param({'base_score': 0.5})
-                
-                # 验证修复
-                new_params = booster.get_dump(dump_format='json')
-                st.info("✅ Fixed base_score in Pipeline model")
-                
-        else:
-            if hasattr(model, 'get_booster'):
-                booster = model.get_booster()
-                booster.set_param({'base_score': 0.5})
-                st.info("✅ Fixed base_score in direct model")
-        
-        return model
+        return joblib.load("XGBoost_retrained_model.pkl")
     except Exception as e:
         st.error(f"Model loading failed: {e}")
         return None
@@ -54,37 +28,18 @@ def load_scaler():
         st.error(f"Scaler loading failed: {e}")
         return None
 
-@st.cache_resource
-def load_background_data():
-    try:
-        data = np.load("background_data.npy")
-        if data.dtype == object:
-            data = data.astype(float)
-        return data
-    except Exception as e:
-        st.warning(f"Background data loading failed: {e}")
-        np.random.seed(42)
-        return np.random.normal(0, 1, (200, 4))
-
 model = load_model()
 scaler = load_scaler()
-background_data = load_background_data()
 
 if model is None or scaler is None:
     st.error("❌ Cannot proceed without model and scaler files")
     st.stop()
 
-# 显示调试信息
-st.info(f"Model type: {type(model).__name__}")
-if hasattr(model, 'steps'):
-    final_model = model.steps[-1][1]
-    st.info(f"Final model type: {type(final_model).__name__}")
-
 # ===== 侧边栏输入 =====
 st.sidebar.header("🔢 Input Variables")
-protein = st.sidebar.number_input("Protein (g/100g)", min_value=0.0, step=0.1)
-sodium = st.sidebar.number_input("Sodium (mg/100g)", min_value=0.0, step=1.0)
-energy = st.sidebar.number_input("Energy (kJ/100g)", min_value=0.0, step=1.0)
+protein = st.sidebar.number_input("Protein (g/100g)", min_value=0.0, step=0.1, value=12.0)
+sodium = st.sidebar.number_input("Sodium (mg/100g)", min_value=0.0, step=1.0, value=300.0)
+energy = st.sidebar.number_input("Energy (kJ/100g)", min_value=0.0, step=1.0, value=400.0)
 procef_4 = st.sidebar.selectbox("Is Ultra-Processed? (procef_4)", [0, 1])
 
 # ===== 模型预测 =====
@@ -92,28 +47,20 @@ if st.sidebar.button("🧮 Predict"):
     try:
         # 1. 准备输入数据
         input_data = np.array([[protein, sodium, energy, procef_4]], dtype=float)
-        
-        # 2. 标准化
         input_scaled = scaler.transform(input_data)
-        
-        # 3. 创建DataFrame
         user_scaled_df = pd.DataFrame(input_scaled, columns=['Protein', 'Sodium', 'Energy', 'procef_4'])
         
-        # 4. 预测
+        # 2. 预测
         prediction = model.predict(user_scaled_df)[0]
         prob = model.predict_proba(user_scaled_df)[0][1]
         
-        # 5. 展示结果
+        # 3. 展示结果
         st.subheader("🔍 Prediction Result")
         label = "✅ Healthy" if prediction == 1 else "⚠️ Unhealthy"
         st.markdown(f"**Prediction:** {label}")
-        st.markdown(f"**Confidence (probability of being healthy):** `{prob:.2f}`")
+        st.markdown(f"**Confidence:** `{prob:.2f}`")
         
-        # 6. 显示输入数据
-        st.subheader("📊 Input Data")
-        st.dataframe(user_scaled_df, use_container_width=True)
-        
-        # 7. 特征重要性
+        # 4. 特征重要性
         st.subheader("📊 Feature Importance")
         
         if hasattr(model, 'steps'):
@@ -134,102 +81,102 @@ if st.sidebar.button("🧮 Predict"):
                 
                 st.pyplot(fig)
         
-        # 8. SHAP力图 - 跳过 TreeExplainer，直接使用其他方法
+        # 5. SHAP力图 - 使用正确的方法
         st.subheader("📊 SHAP Force Plot")
         
-        # 直接使用方法2：Explainer 与 predict_proba
         try:
-            st.write("🔍 Using Explainer with predict_proba...")
-            
-            # 创建干净的背景数据
+            # 创建背景数据
             np.random.seed(42)
-            clean_background = np.random.normal(0, 1, (100, 4)).astype(float)
+            background_data = np.random.normal(0, 1, (100, 4)).astype(float)
             
-            explainer = shap.Explainer(model.predict_proba, clean_background)
+            # 使用 Explainer
+            explainer = shap.Explainer(model.predict_proba, background_data)
             shap_values = explainer(user_scaled_df)
             
-            # 计算 expected_value
-            background_predictions = model.predict_proba(clean_background)
+            # 计算期望值
+            background_predictions = model.predict_proba(background_data)
             expected_value = background_predictions.mean(axis=0)
             
-            with st.expander("Click to view SHAP force plot"):
-                fig, ax = plt.subplots(figsize=(12, 6))
-                
-                # 处理不同的 SHAP 值格式
-                if hasattr(shap_values, 'values'):
-                    if len(shap_values.values.shape) == 3:  # 多分类
-                        shap_vals = shap_values.values[0, :, 1]  # 健康类别
-                        base_val = expected_value[1]
-                    else:  # 二分类
-                        shap_vals = shap_values.values[0, :]
-                        base_val = expected_value[0]
+            # 获取 SHAP 值
+            if hasattr(shap_values, 'values'):
+                if len(shap_values.values.shape) == 3:
+                    shap_vals = shap_values.values[0, :, 1]  # 健康类别
+                    base_val = expected_value[1]
                 else:
-                    shap_vals = shap_values[0, :]
+                    shap_vals = shap_values.values[0, :]
                     base_val = expected_value[0]
-                
-                shap.force_plot(
-                    base_val,
-                    shap_vals,
-                    user_scaled_df.iloc[0],
-                    feature_names=['Protein', 'Sodium', 'Energy', 'procef_4'],
-                    matplotlib=True,
-                    show=False
-                )
-                st.pyplot(fig)
-                plt.close()
-                
-            st.success("✅ SHAP force plot created successfully!")
+            else:
+                shap_vals = shap_values[0, :]
+                base_val = expected_value[0]
+            
+            # 显示 SHAP 值信息
+            st.write(f"Base value: {base_val:.4f}")
+            st.write(f"SHAP values: {shap_vals}")
+            
+            # 创建真正的 SHAP 力图
+            with st.expander("Click to view SHAP force plot"):
+                # 方法1：使用 HTML 版本
+                try:
+                    force_plot = shap.force_plot(
+                        base_val,
+                        shap_vals,
+                        user_scaled_df.iloc[0],
+                        feature_names=['Protein', 'Sodium', 'Energy', 'procef_4'],
+                        matplotlib=False
+                    )
+                    
+                    # 转换为 HTML
+                    force_html = force_plot.html()
+                    components.html(shap.getjs() + force_html, height=400)
+                    st.success("✅ SHAP force plot created (HTML version)!")
+                    
+                except Exception as e:
+                    st.warning(f"HTML version failed: {e}")
+                    
+                    # 方法2：使用 matplotlib 版本
+                    try:
+                        fig, ax = plt.subplots(figsize=(12, 6))
+                        
+                        # 创建自定义的力图
+                        features = ['Protein', 'Sodium', 'Energy', 'procef_4']
+                        feature_values = user_scaled_df.iloc[0].values
+                        
+                        # 创建条形图显示 SHAP 值
+                        colors = ['red' if x < 0 else 'blue' for x in shap_vals]
+                        bars = ax.barh(features, shap_vals, color=colors, alpha=0.7)
+                        
+                        # 添加特征值标签
+                        for i, (bar, val) in enumerate(zip(bars, feature_values)):
+                            width = bar.get_width()
+                            ax.text(width, bar.get_y() + bar.get_height()/2, 
+                                    f'{val:.2f}', ha='left' if width > 0 else 'right', va='center')
+                        
+                        ax.axvline(x=0, color='black', linestyle='-', alpha=0.3)
+                        ax.set_xlabel('SHAP Value')
+                        ax.set_title('SHAP Force Plot (Custom)')
+                        ax.grid(True, alpha=0.3)
+                        
+                        st.pyplot(fig)
+                        plt.close()
+                        st.success("✅ SHAP force plot created (Custom version)!")
+                        
+                    except Exception as e2:
+                        st.error(f"Custom plot failed: {e2}")
+                        
+                        # 方法3：显示 SHAP 值表格
+                        st.subheader("📊 SHAP Values Table")
+                        shap_df = pd.DataFrame({
+                            'Feature': features,
+                            'Feature Value': feature_values,
+                            'SHAP Value': shap_vals,
+                            'Impact': ['Negative' if x < 0 else 'Positive' for x in shap_vals]
+                        })
+                        st.dataframe(shap_df, use_container_width=True)
+                        st.info("💡 SHAP values displayed as table")
             
         except Exception as e:
-            st.warning(f"SHAP method failed: {e}")
-            
-            # 备用方案：显示 SHAP 值表格
-            try:
-                st.write("🔍 Trying to show SHAP values as table...")
-                
-                # 创建干净的背景数据
-                np.random.seed(42)
-                clean_background = np.random.normal(0, 1, (50, 4)).astype(float)
-                
-                explainer = shap.Explainer(model.predict_proba, clean_background)
-                shap_values = explainer(user_scaled_df)
-                
-                # 显示 SHAP 值
-                if hasattr(shap_values, 'values'):
-                    if len(shap_values.values.shape) == 3:
-                        shap_vals = shap_values.values[0, :, 1]
-                    else:
-                        shap_vals = shap_values.values[0, :]
-                else:
-                    shap_vals = shap_values[0, :]
-                
-                # 创建 SHAP 值表格
-                shap_df = pd.DataFrame({
-                    'Feature': ['Protein', 'Sodium', 'Energy', 'procef_4'],
-                    'SHAP Value': shap_vals,
-                    'Feature Value': user_scaled_df.iloc[0].values
-                })
-                
-                st.subheader("📊 SHAP Values Table")
-                st.dataframe(shap_df, use_container_width=True)
-                
-                # 创建简单的条形图
-                fig, ax = plt.subplots(figsize=(10, 6))
-                bars = ax.barh(shap_df['Feature'], shap_df['SHAP Value'])
-                ax.set_xlabel('SHAP Value')
-                ax.set_title('SHAP Values (Feature Impact)')
-                
-                for i, bar in enumerate(bars):
-                    width = bar.get_width()
-                    ax.text(width, bar.get_y() + bar.get_height()/2, 
-                            f'{width:.3f}', ha='left', va='center')
-                
-                st.pyplot(fig)
-                st.success("✅ SHAP values displayed as table and chart!")
-                
-            except Exception as e2:
-                st.error(f"All SHAP methods failed: {e2}")
-                st.info("💡 SHAP explanation is not available, but feature importance is shown above.")
+            st.error(f"SHAP analysis failed: {e}")
+            st.info("💡 SHAP explanation is not available, but feature importance is shown above.")
             
     except Exception as e:
         st.error(f"Prediction failed: {e}")
