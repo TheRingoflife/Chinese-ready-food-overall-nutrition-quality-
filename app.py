@@ -65,7 +65,7 @@ if st.sidebar.button("🧮 Predict"):
         st.markdown(f"**Prediction:** {label}")
         st.markdown(f"**Confidence:** `{prob:.2f}`")
         
-        # 4. 特征重要性 - 调整大小
+        # 4. 特征重要性
         st.subheader("📊 Feature Importance")
         
         if hasattr(model, 'steps'):
@@ -74,7 +74,7 @@ if st.sidebar.button("🧮 Predict"):
                 feature_importance = final_model.feature_importances_
                 features = ['Protein', 'Sodium', 'Energy', 'procef_4']
                 
-                fig, ax = plt.subplots(figsize=(8, 4))  # 减小尺寸
+                fig, ax = plt.subplots(figsize=(10, 6))
                 bars = ax.barh(features, feature_importance)
                 ax.set_xlabel('Importance')
                 ax.set_title('Feature Importance')
@@ -84,11 +84,10 @@ if st.sidebar.button("🧮 Predict"):
                     ax.text(width, bar.get_y() + bar.get_height()/2, 
                             f'{width:.3f}', ha='left', va='center')
                 
-                plt.tight_layout()
                 st.pyplot(fig)
                 plt.close()
         
-        # 5. SHAP力图 - 调整大小
+        # 5. SHAP力图 - 参考您的代码设置
         st.subheader("📊 SHAP Force Plot")
         
         try:
@@ -103,11 +102,11 @@ if st.sidebar.button("🧮 Predict"):
             # 创建 SHAP 力图
             with st.expander("Click to view SHAP force plot", expanded=True):
                 try:
-                    # 调整尺寸，不要太大
-                    plt.figure(figsize=(12, 2))  # 减小高度
+                    # 参考您的代码设置
+                    plt.figure(figsize=(20, 3))
                     shap.force_plot(explainer.expected_value, shap_values[0],
                                    user_scaled_df.iloc[0], matplotlib=True, show=False)
-                    plt.title('SHAP Force Plot - Current Prediction', fontsize=14, fontweight='bold')
+                    plt.title('SHAP Force Plot - Current Prediction', fontsize=16, fontweight='bold')
                     plt.tight_layout()
                     st.pyplot(plt)
                     plt.close()
