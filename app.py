@@ -243,43 +243,46 @@ if st.sidebar.button(TEXTS[lang]['predict_button']):
             st.subheader(TEXTS[lang]['shap_explanation'])
             
             try:
-                # 直接使用 TreeExplainer
-                explainer = shap.TreeExplainer(model)
-                shap_values = explainer.shap_values(input_scaled)
+                # 使用您以前的方法
+                explainer = shap.Explainer(model)
+                shap_values = explainer(user_scaled_df)
+                
+                # 对于二分类，显示健康类别的力图
+                sample_index = 0
                 
                 # 创建力图
-                fig, ax = plt.subplots(figsize=(12, 6))
-                shap.force_plot(
-                    explainer.expected_value,
-                    shap_values[0],
-                    input_scaled[0],
-                    feature_names=['Sodium', 'Protein', 'procef_4', 'Energy'],
-                    matplotlib=True,
+                force_plot_html = shap.plots.force(
+                    base_value=explainer.expected_value[1],  # 健康类别的期望值
+                    shap_values=shap_values.values[sample_index, :, 1],  # 健康类别的SHAP值
+                    features=user_scaled_df.iloc[sample_index],
                     show=False
-                )
-                st.pyplot(fig)
-                plt.close()
+                ).html()
+                
+                # 显示HTML力图
+                components.html(shap.getjs() + force_plot_html, height=400)
+                st.success("✅ SHAP force plot created successfully!")
                 
             except Exception as e:
                 st.warning(f"SHAP force plot error: {str(e)}")
                 st.info("💡 Trying alternative method...")
                 
-                # 备用方法：使用 Explainer
+                # 备用方法：使用 matplotlib
                 try:
                     explainer = shap.Explainer(model)
-                    shap_values = explainer(input_scaled)
+                    shap_values = explainer(user_scaled_df)
                     
                     fig, ax = plt.subplots(figsize=(12, 6))
                     shap.force_plot(
-                        explainer.expected_value,
-                        shap_values.values[0],
-                        input_scaled[0],
+                        explainer.expected_value[1],
+                        shap_values.values[0, :, 1],
+                        user_scaled_df.iloc[0].values,
                         feature_names=['Sodium', 'Protein', 'procef_4', 'Energy'],
                         matplotlib=True,
                         show=False
                     )
                     st.pyplot(fig)
                     plt.close()
+                    st.success("✅ SHAP force plot created with matplotlib!")
                     
                 except Exception as e2:
                     st.error(f"SHAP not available: {str(e2)}")
