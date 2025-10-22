@@ -6,8 +6,6 @@ import matplotlib.pyplot as plt
 import streamlit.components.v1 as components
 import warnings
 import shap
-import plotly.express as px
-import plotly.graph_objects as go
 
 # 忽略警告
 warnings.filterwarnings('ignore')
@@ -59,9 +57,7 @@ TEXTS = {
         "healthy_class": "Healthy: Model prediction = 1",
         "unhealthy_class": "Unhealthy: Model prediction = 0",
         "based_on": "Based on nutritional features",
-        "shap_explanation": "🔬 SHAP Model Explanation",
-        "force_plot": "Force Plot",
-        "waterfall_plot": "Waterfall Plot",
+        "shap_explanation": "🔬 SHAP Force Plot",
         "footer": "Developed using Streamlit and XGBoost · For research use only."
     },
     "zh": {
@@ -104,9 +100,7 @@ TEXTS = {
         "healthy_class": "健康：模型预测 = 1",
         "unhealthy_class": "不健康：模型预测 = 0",
         "based_on": "基于营养特征",
-        "shap_explanation": "🔬 SHAP模型解释",
-        "force_plot": "力图",
-        "waterfall_plot": "瀑布图",
+        "shap_explanation": "🔬 SHAP力图",
         "footer": "使用Streamlit和XGBoost开发 · 仅供研究使用。"
     }
 }
@@ -237,46 +231,54 @@ if st.sidebar.button(TEXTS[lang]['predict_button']):
         
         st.dataframe(feature_impact, use_container_width=True)
         
-        # 8. SHAP解释
+        # 8. SHAP力图
         st.subheader(TEXTS[lang]['shap_explanation'])
         
         try:
-            # 创建SHAP解释器
-            explainer = shap.Explainer(model, background_data)
-            shap_values = explainer(input_scaled)
-            
-            # 创建标签页
-            tab1, tab2 = st.tabs([TEXTS[lang]['force_plot'], TEXTS[lang]['waterfall_plot']])
-            
-            with tab1:
-                # SHAP力图
-                try:
-                    fig, ax = plt.subplots(figsize=(12, 6))
-                    shap.force_plot(
-                        explainer.expected_value,
-                        shap_values.values[0],
-                        input_scaled[0],
-                        feature_names=['Sodium', 'Protein', 'procef_4', 'Energy'],
-                        matplotlib=True,
-                        show=False
-                    )
-                    st.pyplot(fig)
-                    plt.close()
-                except Exception as e:
-                    st.warning(f"Force plot error: {str(e)}")
-            
-            with tab2:
-                # 瀑布图
-                try:
-                    fig, ax = plt.subplots(figsize=(12, 6))
-                    shap.waterfall_plot(shap_values[0], max_display=10, show=False)
-                    st.pyplot(fig)
-                    plt.close()
-                except Exception as e:
-                    st.warning(f"Waterfall plot error: {str(e)}")
-                    
+            # 检查模型类型
+            if hasattr(model, 'steps'):  # 如果是 Pipeline
+                # 获取 Pipeline 中的最终模型
+                final_model = model.named_steps[list(model.named_steps.keys())[-1]]
+                input_transformed = model[:-1].transform(input_data)
+                
+                # 使用 TreeExplainer
+                explainer = shap.TreeExplainer(final_model)
+                shap_values = explainer.shap_values(input_transformed)
+                
+                # 创建力图
+                fig, ax = plt.subplots(figsize=(12, 6))
+                shap.force_plot(
+                    explainer.expected_value,
+                    shap_values[0],
+                    input_transformed[0],
+                    feature_names=['Sodium', 'Protein', 'procef_4', 'Energy'],
+                    matplotlib=True,
+                    show=False
+                )
+                st.pyplot(fig)
+                plt.close()
+                
+            else:  # 如果是普通模型
+                # 使用 TreeExplainer
+                explainer = shap.TreeExplainer(model)
+                shap_values = explainer.shap_values(input_scaled)
+                
+                # 创建力图
+                fig, ax = plt.subplots(figsize=(12, 6))
+                shap.force_plot(
+                    explainer.expected_value,
+                    shap_values[0],
+                    input_scaled[0],
+                    feature_names=['Sodium', 'Protein', 'procef_4', 'Energy'],
+                    matplotlib=True,
+                    show=False
+                )
+                st.pyplot(fig)
+                plt.close()
+                
         except Exception as e:
-            st.warning(f"SHAP explanation error: {str(e)}")
+            st.warning(f"SHAP force plot error: {str(e)}")
+            st.info("💡 Tip: This might be due to Pipeline model structure. SHAP force plot may not be available for this model type.")
         
         # 9. 添加建议
         st.subheader(TEXTS[lang]['recommendations'])
