@@ -82,7 +82,7 @@ if st.sidebar.button("🧮 Predict"):
                 st.pyplot(fig)
                 plt.close()
         
-        # 5. SHAP力图 - 更清晰的版本
+        # 5. SHAP力图 - 优化版本
         st.subheader("📊 SHAP Force Plot")
         
         try:
@@ -117,9 +117,9 @@ if st.sidebar.button("🧮 Predict"):
             with col2:
                 st.write(f"**Final prediction:** {base_val + shap_vals.sum():.4f}")
             
-            # 创建更清晰的 SHAP 力图
+            # 创建优化的 SHAP 力图
             with st.expander("Click to view SHAP force plot", expanded=True):
-                # 方法1：使用 HTML 版本
+                # 方法1：尝试HTML版本
                 try:
                     force_plot = shap.force_plot(
                         base_val,
@@ -129,7 +129,6 @@ if st.sidebar.button("🧮 Predict"):
                         matplotlib=False
                     )
                     
-                    # 转换为 HTML
                     force_html = force_plot.html()
                     components.html(shap.getjs() + force_html, height=400)
                     st.success("✅ SHAP force plot created (HTML version)!")
@@ -137,85 +136,132 @@ if st.sidebar.button("🧮 Predict"):
                 except Exception as e:
                     st.warning(f"HTML version failed: {e}")
                     
-                    # 方法2：创建更清晰的 matplotlib 版本
+                    # 方法2：优化的matplotlib版本
                     try:
-                        fig, ax = plt.subplots(figsize=(14, 8))
+                        # 创建两列布局
+                        col1, col2 = st.columns([2, 1])
                         
-                        # 创建清晰的力图
-                        features = ['Protein', 'Sodium', 'Energy', 'procef_4']
-                        feature_values = user_scaled_df.iloc[0].values
-                        
-                        # 创建条形图显示 SHAP 值
-                        colors = ['red' if x < 0 else 'blue' for x in shap_vals]
-                        bars = ax.barh(features, shap_vals, color=colors, alpha=0.7)
-                        
-                        # 在每个条形图上显示详细信息
-                        for i, (bar, shap_val, feature_val) in enumerate(zip(bars, shap_vals, feature_values)):
-                            width = bar.get_width()
+                        with col1:
+                            # 优化的条形图
+                            fig, ax = plt.subplots(figsize=(10, 6))
                             
-                            # 在条形图内部显示 SHAP 值
-                            ax.text(width/2, bar.get_y() + bar.get_height()/2, 
-                                    f'SHAP: {shap_val:.3f}', ha='center', va='center', 
-                                    color='white', fontweight='bold', fontsize=11)
+                            features = ['Protein', 'Sodium', 'Energy', 'procef_4']
+                            feature_values = user_scaled_df.iloc[0].values
                             
-                            # 在条形图外部显示特征值
-                            if width > 0:
-                                ax.text(width + 0.01, bar.get_y() + bar.get_height()/2, 
-                                        f'Value: {feature_val:.2f}', ha='left', va='center', 
-                                        fontsize=10, bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgray", alpha=0.7))
-                            else:
-                                ax.text(width - 0.01, bar.get_y() + bar.get_height()/2, 
-                                        f'Value: {feature_val:.2f}', ha='right', va='center', 
-                                        fontsize=10, bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgray", alpha=0.7))
+                            # 创建条形图
+                            colors = ['red' if x < 0 else 'blue' for x in shap_vals]
+                            bars = ax.barh(features, shap_vals, color=colors, alpha=0.7)
+                            
+                            # 获取x轴范围用于动态调整
+                            x_min, x_max = ax.get_xlim()
+                            x_range = x_max - x_min
+                            
+                            # 优化文字显示
+                            for i, (bar, shap_val, feature_val) in enumerate(zip(bars, shap_vals, feature_values)):
+                                width = bar.get_width()
+                                y_pos = bar.get_y() + bar.get_height()/2
+                                
+                                # 动态计算文字位置，避免重叠
+                                if abs(width) < x_range * 0.1:  # 如果条形图太窄
+                                    # 在条形图外部显示所有信息
+                                    if width >= 0:
+                                        text_x = width + x_range * 0.05
+                                        ha = 'left'
+                                    else:
+                                        text_x = width - x_range * 0.05
+                                        ha = 'right'
+                                    
+                                    # 显示组合信息
+                                    ax.text(text_x, y_pos, 
+                                            f'SHAP: {shap_val:.3f}\nValue: {feature_val:.2f}', 
+                                            ha=ha, va='center', fontsize=9,
+                                            bbox=dict(boxstyle="round,pad=0.3", facecolor="white", 
+                                                    alpha=0.9, edgecolor="gray", linewidth=0.5))
+                                else:
+                                    # 条形图足够宽，分别显示
+                                    # SHAP值在条形图内部
+                                    ax.text(width/2, y_pos, 
+                                            f'{shap_val:.3f}', ha='center', va='center', 
+                                            color='white', fontweight='bold', fontsize=10)
+                                    
+                                    # 特征值在条形图外部
+                                    if width > 0:
+                                        text_x = width + x_range * 0.02
+                                        ha = 'left'
+                                    else:
+                                        text_x = width - x_range * 0.02
+                                        ha = 'right'
+                                        
+                                    ax.text(text_x, y_pos, 
+                                            f'Value: {feature_val:.2f}', ha=ha, va='center', 
+                                            fontsize=9, bbox=dict(boxstyle="round,pad=0.2", 
+                                            facecolor="lightblue", alpha=0.8, edgecolor="gray"))
+                            
+                            # 设置图表属性
+                            ax.axvline(x=0, color='black', linestyle='-', alpha=0.3, linewidth=2)
+                            ax.set_xlabel('SHAP Value', fontsize=12)
+                            ax.set_title('SHAP Force Plot - Feature Contributions', fontsize=14, pad=20)
+                            ax.grid(True, alpha=0.3)
+                            
+                            # 添加图例
+                            legend_elements = [
+                                plt.Rectangle((0,0),1,1, facecolor='blue', alpha=0.7, label='Positive Impact'),
+                                plt.Rectangle((0,0),1,1, facecolor='red', alpha=0.7, label='Negative Impact')
+                            ]
+                            ax.legend(handles=legend_elements, loc='upper right', fontsize=10)
+                            
+                            plt.tight_layout()
+                            st.pyplot(fig)
+                            plt.close()
                         
-                        # 添加图例
-                        ax.axvline(x=0, color='black', linestyle='-', alpha=0.3, linewidth=2)
-                        ax.set_xlabel('SHAP Value', fontsize=12)
-                        ax.set_title('SHAP Force Plot - Feature Contributions', fontsize=16, pad=20)
-                        ax.grid(True, alpha=0.3)
+                        with col2:
+                            # 详细信息表格
+                            st.subheader("详细信息")
+                            info_df = pd.DataFrame({
+                                'Feature': features,
+                                'SHAP Value': [f'{x:.3f}' for x in shap_vals],
+                                'Feature Value': [f'{x:.2f}' for x in feature_values],
+                                'Impact': ['Negative' if x < 0 else 'Positive' for x in shap_vals]
+                            })
+                            
+                            # 按SHAP值绝对值排序
+                            info_df['abs_shap'] = np.abs(shap_vals)
+                            info_df = info_df.sort_values('abs_shap', ascending=False)
+                            info_df = info_df.drop('abs_shap', axis=1)
+                            
+                            st.dataframe(info_df, use_container_width=True)
+                            
+                            # 添加解释说明
+                            st.markdown("**图例说明：**")
+                            st.markdown("- 🔵 蓝色：正向影响（增加健康性）")
+                            st.markdown("- 🔴 红色：负向影响（降低健康性）")
+                            st.markdown("- 数值越大，影响越强")
                         
-                        # 添加图例说明
-                        legend_elements = [
-                            plt.Rectangle((0,0),1,1, facecolor='blue', alpha=0.7, label='Positive Impact (Higher Health)'),
-                            plt.Rectangle((0,0),1,1, facecolor='red', alpha=0.7, label='Negative Impact (Lower Health)')
-                        ]
-                        ax.legend(handles=legend_elements, loc='upper right', fontsize=10)
-                        
-                        plt.tight_layout()
-                        st.pyplot(fig)
-                        plt.close()
-                        st.success("✅ SHAP force plot created (Clear version)!")
+                        st.success("✅ SHAP force plot created (Optimized version)!")
                         
                     except Exception as e2:
                         st.error(f"Custom plot failed: {e2}")
                         
-                        # 方法3：显示详细的 SHAP 值表格
-                        st.subheader("📊 Detailed SHAP Values Table")
-                        shap_df = pd.DataFrame({
-                            'Feature': features,
-                            'Feature Value': feature_values,
-                            'SHAP Value': shap_vals,
-                            'Impact': ['Negative' if x < 0 else 'Positive' for x in shap_vals],
-                            'Contribution': [f"{x:.3f}" for x in shap_vals]
-                        })
+                        # 方法3：简化版显示
+                        st.subheader("📊 SHAP Values Analysis")
                         
-                        # 按 SHAP 值绝对值排序
-                        shap_df['abs_shap'] = np.abs(shap_df['SHAP Value'])
-                        shap_df = shap_df.sort_values('abs_shap', ascending=False)
-                        shap_df = shap_df.drop('abs_shap', axis=1)
-                        
-                        st.dataframe(shap_df, use_container_width=True)
-                        
-                        # 创建简单的条形图
+                        # 创建简化的条形图
                         fig, ax = plt.subplots(figsize=(12, 6))
-                        bars = ax.barh(shap_df['Feature'], shap_df['SHAP Value'], 
-                                     color=['red' if x < 0 else 'blue' for x in shap_df['SHAP Value']], alpha=0.7)
+                        features = ['Protein', 'Sodium', 'Energy', 'procef_4']
+                        feature_values = user_scaled_df.iloc[0].values
                         
-                        # 添加数值标签
-                        for i, (bar, val) in enumerate(zip(bars, shap_df['SHAP Value'])):
+                        bars = ax.barh(features, shap_vals, color=['red' if x < 0 else 'blue' for x in shap_vals], alpha=0.7)
+                        
+                        # 在条形图右侧显示信息
+                        for bar, shap_val, feature_val in zip(bars, shap_vals, feature_values):
                             width = bar.get_width()
-                            ax.text(width, bar.get_y() + bar.get_height()/2, 
-                                    f'{val:.3f}', ha='left' if width > 0 else 'right', va='center')
+                            y_pos = bar.get_y() + bar.get_height()/2
+                            
+                            # 在条形图右侧显示信息
+                            ax.text(max(0, width) + 0.01, y_pos, 
+                                    f'SHAP: {shap_val:.3f} | Value: {feature_val:.2f}', 
+                                    ha='left', va='center', fontsize=9,
+                                    bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8, edgecolor="gray"))
                         
                         ax.axvline(x=0, color='black', linestyle='-', alpha=0.3)
                         ax.set_xlabel('SHAP Value')
@@ -225,7 +271,8 @@ if st.sidebar.button("🧮 Predict"):
                         plt.tight_layout()
                         st.pyplot(fig)
                         plt.close()
-                        st.info("💡 SHAP values displayed as detailed table and chart")
+                        
+                        st.info("💡 SHAP values displayed in simplified format")
             
         except Exception as e:
             st.error(f"SHAP analysis failed: {e}")
