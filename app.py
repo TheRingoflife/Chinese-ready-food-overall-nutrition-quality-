@@ -148,7 +148,7 @@ if st.sidebar.button("🧮 Predict"):
             else:
                 st.warning("Model does not have feature_importances_ attribute")
         
-        # 8. SHAP力图 - 多种方法尝试
+        # 8. SHAP力图 - 修复版本
         st.subheader("📊 SHAP Force Plot")
         
         # 方法1：TreeExplainer
@@ -181,7 +181,7 @@ if st.sidebar.button("🧮 Predict"):
         except Exception as e:
             st.warning(f"TreeExplainer failed: {e}")
             
-            # 方法2：使用 Explainer 与 predict_proba
+            # 方法2：使用 Explainer 与 predict_proba - 修复版本
             try:
                 st.write("🔍 Trying Explainer with predict_proba...")
                 
@@ -192,6 +192,10 @@ if st.sidebar.button("🧮 Predict"):
                 explainer = shap.Explainer(model.predict_proba, clean_background)
                 shap_values = explainer(user_scaled_df)
                 
+                # 计算 expected_value
+                background_predictions = model.predict_proba(clean_background)
+                expected_value = background_predictions.mean(axis=0)
+                
                 with st.expander("Click to view SHAP force plot (Explainer)"):
                     fig, ax = plt.subplots(figsize=(12, 6))
                     
@@ -199,13 +203,13 @@ if st.sidebar.button("🧮 Predict"):
                     if hasattr(shap_values, 'values'):
                         if len(shap_values.values.shape) == 3:  # 多分类
                             shap_vals = shap_values.values[0, :, 1]  # 健康类别
-                            base_val = explainer.expected_value[1]
+                            base_val = expected_value[1]
                         else:  # 二分类
                             shap_vals = shap_values.values[0, :]
-                            base_val = explainer.expected_value
+                            base_val = expected_value[0]
                     else:
                         shap_vals = shap_values[0, :]
-                        base_val = explainer.expected_value
+                        base_val = expected_value[0]
                     
                     shap.force_plot(
                         base_val,
@@ -223,12 +227,16 @@ if st.sidebar.button("🧮 Predict"):
             except Exception as e2:
                 st.warning(f"Explainer method failed: {e2}")
                 
-                # 方法3：使用原始背景数据
+                # 方法3：使用原始背景数据 - 修复版本
                 try:
                     st.write("🔍 Trying with original background data...")
                     
                     explainer = shap.Explainer(model.predict_proba, background_data)
                     shap_values = explainer(user_scaled_df)
+                    
+                    # 计算 expected_value
+                    background_predictions = model.predict_proba(background_data)
+                    expected_value = background_predictions.mean(axis=0)
                     
                     with st.expander("Click to view SHAP force plot (Original background)"):
                         fig, ax = plt.subplots(figsize=(12, 6))
@@ -236,13 +244,13 @@ if st.sidebar.button("🧮 Predict"):
                         if hasattr(shap_values, 'values'):
                             if len(shap_values.values.shape) == 3:
                                 shap_vals = shap_values.values[0, :, 1]
-                                base_val = explainer.expected_value[1]
+                                base_val = expected_value[1]
                             else:
                                 shap_vals = shap_values.values[0, :]
-                                base_val = explainer.expected_value
+                                base_val = expected_value[0]
                         else:
                             shap_vals = shap_values[0, :]
-                            base_val = explainer.expected_value
+                            base_val = expected_value[0]
                         
                         shap.force_plot(
                             base_val,
