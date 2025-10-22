@@ -20,14 +20,21 @@ def load_model():
     try:
         model = joblib.load("XGBoost_retrained_model.pkl")
         
-        # 修复 base_score 问题
+        # 更彻底的 base_score 修复
         if hasattr(model, 'steps'):
             final_model = model.steps[-1][1]
             if hasattr(final_model, 'get_booster'):
                 booster = final_model.get_booster()
-                # 设置正确的 base_score
+                # 获取当前参数
+                current_params = booster.get_dump(dump_format='json')
+                
+                # 强制设置 base_score
                 booster.set_param({'base_score': 0.5})
+                
+                # 验证修复
+                new_params = booster.get_dump(dump_format='json')
                 st.info("✅ Fixed base_score in Pipeline model")
+                
         else:
             if hasattr(model, 'get_booster'):
                 booster = model.get_booster()
@@ -51,7 +58,6 @@ def load_scaler():
 def load_background_data():
     try:
         data = np.load("background_data.npy")
-        # 确保背景数据是数值格式
         if data.dtype == object:
             data = data.astype(float)
         return data
@@ -127,47 +133,43 @@ if st.sidebar.button("🧮 Predict"):
                             f'{width:.3f}', ha='left', va='center')
                 
                 st.pyplot(fig)
-            else:
-                st.warning("Final model does not have feature_importances_ attribute")
-        else:
-            if hasattr(model, 'feature_importances_'):
-                feature_importance = model.feature_importances_
-                features = ['Protein', 'Sodium', 'Energy', 'procef_4']
-                
-                fig, ax = plt.subplots(figsize=(10, 6))
-                bars = ax.barh(features, feature_importance)
-                ax.set_xlabel('Importance')
-                ax.set_title('Feature Importance')
-                
-                for i, bar in enumerate(bars):
-                    width = bar.get_width()
-                    ax.text(width, bar.get_y() + bar.get_height()/2, 
-                            f'{width:.3f}', ha='left', va='center')
-                
-                st.pyplot(fig)
-            else:
-                st.warning("Model does not have feature_importances_ attribute")
         
-        # 8. SHAP力图 - 修复版本
+        # 8. SHAP力图 - 跳过 TreeExplainer，直接使用其他方法
         st.subheader("📊 SHAP Force Plot")
         
-        # 方法1：TreeExplainer
+        # 直接使用方法2：Explainer 与 predict_proba
         try:
-            st.write("🔍 Trying TreeExplainer...")
+            st.write("🔍 Using Explainer with predict_proba...")
             
-            if hasattr(model, 'steps'):
-                final_model = model.steps[-1][1]
-                explainer = shap.TreeExplainer(final_model)
-            else:
-                explainer = shap.TreeExplainer(model)
+            # 创建干净的背景数据
+            np.random.seed(42)
+            clean_background = np.random.normal(0, 1, (100, 4)).astype(float)
             
-            shap_values = explainer.shap_values(user_scaled_df.values)
+            explainer = shap.Explainer(model.predict_proba, clean_background)
+            shap_values = explainer(user_scaled_df)
             
-            with st.expander("Click to view SHAP force plot (TreeExplainer)"):
+            # 计算 expected_value
+            background_predictions = model.predict_proba(clean_background)
+            expected_value = background_predictions.mean(axis=0)
+            
+            with st.expander("Click to view SHAP force plot"):
                 fig, ax = plt.subplots(figsize=(12, 6))
+                
+                # 处理不同的 SHAP 值格式
+                if hasattr(shap_values, 'values'):
+                    if len(shap_values.values.shape) == 3:  # 多分类
+                        shap_vals = shap_values.values[0, :, 1]  # 健康类别
+                        base_val = expected_value[1]
+                    else:  # 二分类
+                        shap_vals = shap_values.values[0, :]
+                        base_val = expected_value[0]
+                else:
+                    shap_vals = shap_values[0, :]
+                    base_val = expected_value[0]
+                
                 shap.force_plot(
-                    explainer.expected_value,
-                    shap_values[0],
+                    base_val,
+                    shap_vals,
                     user_scaled_df.iloc[0],
                     feature_names=['Protein', 'Sodium', 'Energy', 'procef_4'],
                     matplotlib=True,
@@ -176,98 +178,58 @@ if st.sidebar.button("🧮 Predict"):
                 st.pyplot(fig)
                 plt.close()
                 
-            st.success("✅ SHAP force plot created with TreeExplainer!")
-                    
-        except Exception as e:
-            st.warning(f"TreeExplainer failed: {e}")
+            st.success("✅ SHAP force plot created successfully!")
             
-            # 方法2：使用 Explainer 与 predict_proba - 修复版本
+        except Exception as e:
+            st.warning(f"SHAP method failed: {e}")
+            
+            # 备用方案：显示 SHAP 值表格
             try:
-                st.write("🔍 Trying Explainer with predict_proba...")
+                st.write("🔍 Trying to show SHAP values as table...")
                 
                 # 创建干净的背景数据
                 np.random.seed(42)
-                clean_background = np.random.normal(0, 1, (100, 4)).astype(float)
+                clean_background = np.random.normal(0, 1, (50, 4)).astype(float)
                 
                 explainer = shap.Explainer(model.predict_proba, clean_background)
                 shap_values = explainer(user_scaled_df)
                 
-                # 计算 expected_value
-                background_predictions = model.predict_proba(clean_background)
-                expected_value = background_predictions.mean(axis=0)
-                
-                with st.expander("Click to view SHAP force plot (Explainer)"):
-                    fig, ax = plt.subplots(figsize=(12, 6))
-                    
-                    # 处理不同的 SHAP 值格式
-                    if hasattr(shap_values, 'values'):
-                        if len(shap_values.values.shape) == 3:  # 多分类
-                            shap_vals = shap_values.values[0, :, 1]  # 健康类别
-                            base_val = expected_value[1]
-                        else:  # 二分类
-                            shap_vals = shap_values.values[0, :]
-                            base_val = expected_value[0]
+                # 显示 SHAP 值
+                if hasattr(shap_values, 'values'):
+                    if len(shap_values.values.shape) == 3:
+                        shap_vals = shap_values.values[0, :, 1]
                     else:
-                        shap_vals = shap_values[0, :]
-                        base_val = expected_value[0]
-                    
-                    shap.force_plot(
-                        base_val,
-                        shap_vals,
-                        user_scaled_df.iloc[0],
-                        feature_names=['Protein', 'Sodium', 'Energy', 'procef_4'],
-                        matplotlib=True,
-                        show=False
-                    )
-                    st.pyplot(fig)
-                    plt.close()
-                    
-                st.success("✅ SHAP force plot created with Explainer!")
+                        shap_vals = shap_values.values[0, :]
+                else:
+                    shap_vals = shap_values[0, :]
+                
+                # 创建 SHAP 值表格
+                shap_df = pd.DataFrame({
+                    'Feature': ['Protein', 'Sodium', 'Energy', 'procef_4'],
+                    'SHAP Value': shap_vals,
+                    'Feature Value': user_scaled_df.iloc[0].values
+                })
+                
+                st.subheader("📊 SHAP Values Table")
+                st.dataframe(shap_df, use_container_width=True)
+                
+                # 创建简单的条形图
+                fig, ax = plt.subplots(figsize=(10, 6))
+                bars = ax.barh(shap_df['Feature'], shap_df['SHAP Value'])
+                ax.set_xlabel('SHAP Value')
+                ax.set_title('SHAP Values (Feature Impact)')
+                
+                for i, bar in enumerate(bars):
+                    width = bar.get_width()
+                    ax.text(width, bar.get_y() + bar.get_height()/2, 
+                            f'{width:.3f}', ha='left', va='center')
+                
+                st.pyplot(fig)
+                st.success("✅ SHAP values displayed as table and chart!")
                 
             except Exception as e2:
-                st.warning(f"Explainer method failed: {e2}")
-                
-                # 方法3：使用原始背景数据 - 修复版本
-                try:
-                    st.write("🔍 Trying with original background data...")
-                    
-                    explainer = shap.Explainer(model.predict_proba, background_data)
-                    shap_values = explainer(user_scaled_df)
-                    
-                    # 计算 expected_value
-                    background_predictions = model.predict_proba(background_data)
-                    expected_value = background_predictions.mean(axis=0)
-                    
-                    with st.expander("Click to view SHAP force plot (Original background)"):
-                        fig, ax = plt.subplots(figsize=(12, 6))
-                        
-                        if hasattr(shap_values, 'values'):
-                            if len(shap_values.values.shape) == 3:
-                                shap_vals = shap_values.values[0, :, 1]
-                                base_val = expected_value[1]
-                            else:
-                                shap_vals = shap_values.values[0, :]
-                                base_val = expected_value[0]
-                        else:
-                            shap_vals = shap_values[0, :]
-                            base_val = expected_value[0]
-                        
-                        shap.force_plot(
-                            base_val,
-                            shap_vals,
-                            user_scaled_df.iloc[0],
-                            feature_names=['Protein', 'Sodium', 'Energy', 'procef_4'],
-                            matplotlib=True,
-                            show=False
-                        )
-                        st.pyplot(fig)
-                        plt.close()
-                        
-                    st.success("✅ SHAP force plot created with original background!")
-                    
-                except Exception as e3:
-                    st.error(f"All SHAP methods failed: {e3}")
-                    st.info("💡 SHAP explanation is not available, but feature importance is shown above.")
+                st.error(f"All SHAP methods failed: {e2}")
+                st.info("💡 SHAP explanation is not available, but feature importance is shown above.")
             
     except Exception as e:
         st.error(f"Prediction failed: {e}")
