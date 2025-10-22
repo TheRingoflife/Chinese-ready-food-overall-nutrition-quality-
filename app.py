@@ -18,52 +18,46 @@ st.markdown("This app uses a trained XGBoost model to classify whether a ready-t
 @st.cache_resource
 def load_model():
     try:
+        # 尝试加载你的模型文件
         model = joblib.load("XGBoost_retrained_model.pkl")
         st.success("✅ Model loaded successfully")
         return model
     except Exception as e:
         st.error(f"❌ Failed to load model: {e}")
+        st.error("Please ensure 'XGBoost_retrained_model.pkl' exists and is compatible")
         return None
 
 @st.cache_resource
 def load_scaler():
     try:
+        # 尝试加载你的标准化器文件
         scaler = joblib.load("scaler2.pkl")
         st.success("✅ Scaler loaded successfully")
         return scaler
     except Exception as e:
         st.error(f"❌ Failed to load scaler: {e}")
+        st.error("Please ensure 'scaler2.pkl' exists and is compatible")
         return None
 
 @st.cache_resource
 def load_background_data():
     try:
+        # 尝试加载背景数据
         data = np.load("background_data.npy")
         st.success("✅ Background data loaded successfully")
         return data
     except Exception as e:
         st.warning(f"⚠️ Failed to load background data: {e}")
         st.warning("Creating simulated background data...")
+        # 创建模拟背景数据
         np.random.seed(42)
         return np.random.normal(0, 1, (100, 4))
-
-@st.cache_resource
-def create_explainer(model, background_data):
-    try:
-        import shap
-        explainer = shap.Explainer(model, background_data)
-        st.success("✅ SHAP explainer created successfully")
-        return explainer
-    except Exception as e:
-        st.warning(f"⚠️ Failed to create SHAP explainer: {e}")
-        return None
 
 # 加载组件
 with st.spinner("🔄 Loading model and data..."):
     model = load_model()
     scaler = load_scaler()
     background_data = load_background_data()
-    explainer = create_explainer(model, background_data)
 
 if model is None or scaler is None:
     st.error("❌ Cannot proceed without model and scaler files")
@@ -81,7 +75,7 @@ protein = st.sidebar.number_input("Protein (g/100g)", min_value=0.0, step=0.1, v
 procef_4 = st.sidebar.selectbox("Is Ultra-Processed? (procef_4)", [0, 1])
 energy = st.sidebar.number_input("Energy (kJ/100g)", min_value=0.0, step=1.0, value=1000.0)
 
-# ===== 模型预测 + SHAP 可解释性 =====
+# ===== 模型预测 =====
 if st.sidebar.button("🧮 Predict"):
     try:
         # 1. 准备输入数据（4个特征）
@@ -103,76 +97,37 @@ if st.sidebar.button("🧮 Predict"):
         st.markdown(f"**Prediction:** {label}")
         st.markdown(f"**Confidence (probability of being healthy):** `{prob:.2f}`")
         
-        # 6. SHAP解释
-        if explainer is not None:
-            st.subheader("📊 Model Explanation (SHAP)")
-            
-            try:
-                # 计算SHAP值
-                shap_values = explainer(user_scaled_df)
-                
-                # 创建SHAP可视化
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.markdown("#### Feature Importance")
-                    import shap
-                    shap.plots.bar(shap_values, show=False)
-                    st.pyplot(plt.gcf())
-                    plt.close()
-                
-                with col2:
-                    st.markdown("#### Waterfall Plot")
-                    shap.waterfall_plot(shap_values[0], show=False)
-                    st.pyplot(plt.gcf())
-                    plt.close()
-                
-                # 特征影响分析表格
-                st.markdown("#### Feature Impact Analysis")
-                feature_impact = pd.DataFrame({
-                    'Feature': ['Sodium', 'Protein', 'procef_4', 'Energy'],
-                    'Input Value': input_data[0],
-                    'SHAP Value': shap_values.values[0],
-                    'Impact': ['Positive' if x > 0 else 'Negative' for x in shap_values.values[0]]
-                })
-                
-                # 按SHAP值绝对值排序
-                feature_impact['Abs_SHAP'] = abs(feature_impact['SHAP Value'])
-                feature_impact = feature_impact.sort_values('Abs_SHAP', ascending=False)
-                
-                st.dataframe(feature_impact[['Feature', 'Input Value', 'SHAP Value', 'Impact']], 
-                           use_container_width=True)
-                
-                # 添加解释文本
-                st.markdown("**Impact Explanation:**")
-                for _, row in feature_impact.iterrows():
-                    impact_text = "increases" if row['SHAP Value'] > 0 else "decreases"
-                    st.write(f"• **{row['Feature']}**: {impact_text} the probability of being healthy by {abs(row['SHAP Value']):.3f}")
-                
-            except Exception as e:
-                st.error(f"SHAP visualization failed: {e}")
-        else:
-            # 如果没有SHAP，显示简单的特征重要性
+        # 6. 特征重要性（如果模型支持）
+        if hasattr(model, 'feature_importances_'):
             st.subheader("📊 Feature Importance")
-            if hasattr(model, 'feature_importances_'):
-                feature_importance = model.feature_importances_
-                features = ['Sodium', 'Protein', 'procef_4', 'Energy']
-                
-                fig, ax = plt.subplots(figsize=(10, 6))
-                bars = ax.barh(features, feature_importance)
-                ax.set_xlabel('Importance')
-                ax.set_title('Feature Importance')
-                
-                for i, bar in enumerate(bars):
-                    width = bar.get_width()
-                    ax.text(width, bar.get_y() + bar.get_height()/2, 
-                            f'{width:.3f}', ha='left', va='center')
-                
-                st.pyplot(fig)
-            else:
-                st.warning("⚠️ SHAP explainer not available and model doesn't support feature importance")
+            feature_importance = model.feature_importances_
+            features = ['Sodium', 'Protein', 'procef_4', 'Energy']
+            
+            # 创建重要性图表
+            fig, ax = plt.subplots(figsize=(10, 6))
+            bars = ax.barh(features, feature_importance)
+            ax.set_xlabel('Importance')
+            ax.set_title('Feature Importance')
+            
+            # 添加数值标签
+            for i, bar in enumerate(bars):
+                width = bar.get_width()
+                ax.text(width, bar.get_y() + bar.get_height()/2, 
+                        f'{width:.3f}', ha='left', va='center')
+            
+            st.pyplot(fig)
         
-        # 7. 添加建议
+        # 7. 特征影响分析
+        st.subheader("📋 Feature Impact Analysis")
+        feature_impact = pd.DataFrame({
+            'Feature': ['Sodium', 'Protein', 'procef_4', 'Energy'],
+            'Input Value': input_data[0],
+            'Normalized Value': input_scaled[0]
+        })
+        
+        st.dataframe(feature_impact, use_container_width=True)
+        
+        # 8. 添加建议
         st.subheader("💡 Recommendations")
         if prediction == 0:  # Unhealthy
             st.warning("**This food item is classified as unhealthy. Consider:**")
