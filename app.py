@@ -6,6 +6,17 @@ import shap
 import matplotlib.pyplot as plt
 import streamlit.components.v1 as components
 
+# 设置matplotlib参数，避免重叠
+plt.rcParams.update({
+    'font.size': 10,
+    'axes.titlesize': 14,
+    'axes.labelsize': 12,
+    'xtick.labelsize': 10,
+    'ytick.labelsize': 10,
+    'legend.fontsize': 10,
+    'figure.titlesize': 16
+})
+
 # ===== 页面设置 =====
 st.set_page_config(page_title="Nutritional Quality Classifier", layout="wide")
 st.title("🍱 Predicting Nutritional Healthiness of Ready Food")
@@ -65,7 +76,7 @@ if st.sidebar.button("🧮 Predict"):
         st.markdown(f"**Prediction:** {label}")
         st.markdown(f"**Confidence:** `{prob:.2f}`")
         
-        # 4. 特征重要性 - 调整大小
+        # 4. 特征重要性
         st.subheader("📊 Feature Importance")
         
         if hasattr(model, 'steps'):
@@ -88,7 +99,7 @@ if st.sidebar.button("🧮 Predict"):
                 st.pyplot(fig)
                 plt.close()
         
-        # 5. SHAP力图 - 使用您提供的设置
+        # 5. SHAP力图 - 优先使用matplotlib版本
         st.subheader("📊 SHAP Force Plot")
         
         try:
@@ -123,81 +134,108 @@ if st.sidebar.button("🧮 Predict"):
             with col2:
                 st.write(f"**Final prediction:** {base_val + shap_vals.sum():.4f}")
             
-            # 创建 SHAP 力图 - 使用您提供的设置
+            # 创建 SHAP 力图
             with st.expander("Click to view SHAP force plot", expanded=True):
-                # 方法1：使用 HTML 版本
+                # 方法1：优先使用matplotlib版本
                 try:
-                    force_plot = shap.force_plot(
-                        base_val,
-                        shap_vals,
-                        user_scaled_df.iloc[0],
-                        feature_names=['Protein', 'Sodium', 'Energy', 'procef_4'],
-                        matplotlib=False
-                    )
+                    # 设置更大的图形尺寸，避免重叠
+                    plt.figure(figsize=(20, 8))  # 增加高度
                     
-                    # 转换为 HTML
-                    force_html = force_plot.html()
-                    components.html(shap.getjs() + force_html, height=400)
-                    st.success("✅ SHAP force plot created (HTML version)!")
+                    # 创建SHAP力图，确保包含特征名称
+                    shap.force_plot(base_val, shap_vals,
+                                   user_scaled_df.iloc[0], 
+                                   feature_names=['Protein', 'Sodium', 'Energy', 'procef_4'],  # 添加特征名称
+                                   matplotlib=True, show=False)
+                    
+                    plt.title('SHAP Force Plot - Current Prediction', fontsize=16, fontweight='bold', pad=30)
+                    plt.tight_layout()
+                    st.pyplot(plt)
+                    plt.close()
+                    st.success("✅ SHAP force plot created (Matplotlib version)!")
                     
                 except Exception as e:
-                    st.warning(f"HTML version failed: {e}")
+                    st.warning(f"Matplotlib version failed: {e}")
                     
-                    # 方法2：使用您提供的matplotlib设置
+                    # 方法2：使用 HTML 版本作为备用
                     try:
-                        # 参考您的代码设置
-                        plt.figure(figsize=(20, 3))
-                        shap.force_plot(base_val, shap_vals,
-                                       user_scaled_df.iloc[0], matplotlib=True, show=False)
-                        plt.title('SHAP Force Plot - Current Prediction', fontsize=16, fontweight='bold')
-                        plt.tight_layout()
-                        st.pyplot(plt)
-                        plt.close()
-                        st.success("✅ SHAP force plot created (Matplotlib version)!")
+                        force_plot = shap.force_plot(
+                            base_val,
+                            shap_vals,
+                            user_scaled_df.iloc[0],
+                            feature_names=['Protein', 'Sodium', 'Energy', 'procef_4'],
+                            matplotlib=False
+                        )
+                        
+                        # 转换为 HTML
+                        force_html = force_plot.html()
+                        components.html(shap.getjs() + force_html, height=400)
+                        st.success("✅ SHAP force plot created (HTML version - Backup)!")
                         
                     except Exception as e2:
-                        st.error(f"Matplotlib plot failed: {e2}")
+                        st.warning(f"HTML version also failed: {e2}")
                         
-                        # 方法3：显示详细的 SHAP 值表格
-                        st.subheader("📊 Detailed SHAP Values Table")
-                        features = ['Protein', 'Sodium', 'Energy', 'procef_4']
-                        feature_values = user_scaled_df.iloc[0].values
-                        
-                        shap_df = pd.DataFrame({
-                            'Feature': features,
-                            'Feature Value': feature_values,
-                            'SHAP Value': shap_vals,
-                            'Impact': ['Negative' if x < 0 else 'Positive' for x in shap_vals],
-                            'Contribution': [f"{x:.3f}" for x in shap_vals]
-                        })
-                        
-                        # 按 SHAP 值绝对值排序
-                        shap_df['abs_shap'] = np.abs(shap_df['SHAP Value'])
-                        shap_df = shap_df.sort_values('abs_shap', ascending=False)
-                        shap_df = shap_df.drop('abs_shap', axis=1)
-                        
-                        st.dataframe(shap_df, use_container_width=True)
-                        
-                        # 创建简单的条形图
-                        fig, ax = plt.subplots(figsize=(10, 5))
-                        bars = ax.barh(shap_df['Feature'], shap_df['SHAP Value'], 
-                                     color=['red' if x < 0 else 'blue' for x in shap_df['SHAP Value']], alpha=0.7)
-                        
-                        # 添加数值标签
-                        for i, (bar, val) in enumerate(zip(bars, shap_df['SHAP Value'])):
-                            width = bar.get_width()
-                            ax.text(width, bar.get_y() + bar.get_height()/2, 
-                                    f'{val:.3f}', ha='left' if width > 0 else 'right', va='center', fontsize=9)
-                        
-                        ax.axvline(x=0, color='black', linestyle='-', alpha=0.3)
-                        ax.set_xlabel('SHAP Value', fontsize=11)
-                        ax.set_title('SHAP Values by Feature', fontsize=13)
-                        ax.grid(True, alpha=0.3)
-                        
-                        plt.tight_layout()
-                        st.pyplot(fig)
-                        plt.close()
-                        st.info("💡 SHAP values displayed as detailed table and chart")
+                        # 方法3：自定义清晰的条形图（带特征名称）
+                        try:
+                            fig, ax = plt.subplots(figsize=(15, 8))
+                            
+                            features = ['Protein', 'Sodium', 'Energy', 'procef_4']
+                            feature_values = user_scaled_df.iloc[0].values
+                            
+                            # 创建条形图
+                            colors = ['red' if x < 0 else 'blue' for x in shap_vals]
+                            bars = ax.barh(features, shap_vals, color=colors, alpha=0.7, height=0.6)
+                            
+                            # 添加特征名称和数值标签
+                            for i, (bar, shap_val, feature_val, feature_name) in enumerate(zip(bars, shap_vals, feature_values, features)):
+                                width = bar.get_width()
+                                y_pos = bar.get_y() + bar.get_height()/2
+                                
+                                # 在条形图内部显示SHAP值
+                                ax.text(width/2, y_pos, f'{shap_val:.3f}', 
+                                       ha='center', va='center', color='white', fontweight='bold', fontsize=12)
+                                
+                                # 在条形图外部显示特征名称和值
+                                if width > 0:
+                                    ax.text(width + 0.05, y_pos, f'{feature_name}: {feature_val:.2f}', 
+                                           ha='left', va='center', fontsize=11, fontweight='bold',
+                                           bbox=dict(boxstyle="round,pad=0.4", facecolor="lightblue", alpha=0.8))
+                                else:
+                                    ax.text(width - 0.05, y_pos, f'{feature_name}: {feature_val:.2f}', 
+                                           ha='right', va='center', fontsize=11, fontweight='bold',
+                                           bbox=dict(boxstyle="round,pad=0.4", facecolor="lightcoral", alpha=0.8))
+                            
+                            # 添加零线
+                            ax.axvline(x=0, color='black', linestyle='-', alpha=0.5, linewidth=2)
+                            ax.set_xlabel('SHAP Value', fontsize=12)
+                            ax.set_ylabel('Features', fontsize=12)
+                            ax.set_title('SHAP Force Plot - Feature Contributions', fontsize=14, pad=20)
+                            ax.grid(True, alpha=0.3)
+                            
+                            # 添加图例
+                            legend_elements = [
+                                plt.Rectangle((0,0),1,1, facecolor='blue', alpha=0.7, label='Positive Impact (Higher Health)'),
+                                plt.Rectangle((0,0),1,1, facecolor='red', alpha=0.7, label='Negative Impact (Lower Health)')
+                            ]
+                            ax.legend(handles=legend_elements, loc='upper right', fontsize=10)
+                            
+                            plt.tight_layout()
+                            st.pyplot(fig)
+                            plt.close()
+                            st.success("✅ SHAP force plot created (Custom version with feature names)!")
+                            
+                        except Exception as e3:
+                            st.error(f"All SHAP plots failed: {e3}")
+                            
+                            # 方法4：显示详细表格
+                            st.subheader("📊 SHAP Values Table")
+                            shap_df = pd.DataFrame({
+                                'Feature': features,
+                                'Feature Value': feature_values,
+                                'SHAP Value': shap_vals,
+                                'Impact': ['Negative' if x < 0 else 'Positive' for x in shap_vals]
+                            })
+                            st.dataframe(shap_df, use_container_width=True)
+                            st.info("💡 SHAP values displayed as table")
             
         except Exception as e:
             st.error(f"SHAP analysis failed: {e}")
