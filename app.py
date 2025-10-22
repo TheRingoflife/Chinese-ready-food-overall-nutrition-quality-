@@ -344,7 +344,6 @@
 # st.markdown("---")
 # st.markdown(TEXTS[lang]['footer'])
 
-
 import streamlit as st
 import numpy as np
 import pandas as pd
@@ -504,7 +503,7 @@ def load_background_data():
         st.warning(f"⚠️ Failed to load background data: {e}")
         st.warning("Creating simulated background data...")
         np.random.seed(42)
-        return np.random.normal(0, 1, (100, 4))
+        return np.random.normal(0, 1, (200, 4))  # 四特征
 
 # 加载组件
 with st.spinner("🔄 Loading model and data..."):
@@ -537,7 +536,7 @@ if st.sidebar.button(TEXTS[lang]['predict_button']):
         st.warning(f"⚠️ {TEXTS[lang]['please_input']}")
     else:
         try:
-            # 1. 准备输入数据（4个特征）
+            # 1. 准备输入数据（四特征：Sodium, Protein, procef_4, Energy）
             input_data = np.array([[sodium, protein, procef_4, energy]])
             
             # 2. 标准化
@@ -546,9 +545,9 @@ if st.sidebar.button(TEXTS[lang]['predict_button']):
             # 3. 创建DataFrame
             user_scaled_df = pd.DataFrame(input_scaled, columns=['Sodium', 'Protein', 'procef_4', 'Energy'])
             
-            # 4. 预测
+            # 4. 预测（二分类：健康/不健康）
             prediction = model.predict(user_scaled_df)[0]
-            prob = model.predict_proba(user_scaled_df)[0][1]
+            prob = model.predict_proba(user_scaled_df)[0][1]  # 健康类别的概率
             
             # 5. 展示结果
             st.subheader(TEXTS[lang]['prediction_title'])
@@ -586,96 +585,75 @@ if st.sidebar.button(TEXTS[lang]['predict_button']):
             
             st.dataframe(feature_impact, use_container_width=True)
             
-            # 8. SHAP力图 - 完全修复版本
+            # 8. SHAP力图 - 二分类四特征版本
             st.subheader(TEXTS[lang]['shap_explanation'])
             
             try:
-                # 方法1：使用 predict_proba 函数而不是模型对象
-                explainer = shap.Explainer(model.predict_proba, background_data)
-                shap_values = explainer(user_scaled_df)
+                # 确保数据格式正确（四特征）
+                user_scaled_df_clean = user_scaled_df.copy()
+                for col in user_scaled_df_clean.columns:
+                    user_scaled_df_clean[col] = pd.to_numeric(user_scaled_df_clean[col], errors='coerce')
+                user_scaled_df_clean = user_scaled_df_clean.fillna(0)
                 
-                # 对于二分类，显示健康类别的力图
+                # 创建匹配的背景数据（四特征）
+                np.random.seed(42)
+                adjusted_background = np.random.normal(0, 1, (200, 4))
+                
+                # 使用二分类模型
+                explainer = shap.Explainer(model.predict_proba, adjusted_background)
+                shap_values = explainer(user_scaled_df_clean)
+                
+                # 二分类：只显示健康类别的力图
                 sample_index = 0
                 
-                # 创建力图
                 force_plot_html = shap.plots.force(
-                    base_value=explainer.expected_value[1],  # 健康类别的期望值
+                    base_value=explainer.expected_value[1],  # 健康类别(1)的期望值
                     shap_values=shap_values.values[sample_index, :, 1],  # 健康类别的SHAP值
-                    features=user_scaled_df.iloc[sample_index],
+                    features=user_scaled_df_clean.iloc[sample_index],
                     show=False
                 ).html()
                 
-                # 显示HTML力图
                 components.html(shap.getjs() + force_plot_html, height=400)
                 st.success("✅ SHAP force plot created successfully!")
                 
             except Exception as e:
-                st.warning(f"SHAP method 1 failed: {str(e)}")
+                st.warning(f"SHAP error: {str(e)}")
                 
+                # 备用方案：使用 matplotlib 版本
                 try:
-                    # 方法2：提取 Pipeline 中的最终模型
-                    if hasattr(model, 'steps'):
-                        final_model = model.steps[-1][1]  # 获取最后一个步骤的模型
-                        explainer = shap.TreeExplainer(final_model)
-                        shap_values = explainer.shap_values(user_scaled_df)
-                        
-                        # 创建力图
-                        sample_index = 0
-                        force_plot_html = shap.plots.force(
-                            base_value=explainer.expected_value,
-                            shap_values=shap_values[sample_index, :],
-                            features=user_scaled_df.iloc[sample_index],
-                            show=False
-                        ).html()
-                        
-                        components.html(shap.getjs() + force_plot_html, height=400)
-                        st.success("✅ SHAP force plot created with TreeExplainer!")
-                        
-                    else:
-                        # 方法3：直接使用模型
-                        explainer = shap.TreeExplainer(model)
-                        shap_values = explainer.shap_values(user_scaled_df)
-                        
-                        sample_index = 0
-                        force_plot_html = shap.plots.force(
-                            base_value=explainer.expected_value,
-                            shap_values=shap_values[sample_index, :],
-                            features=user_scaled_df.iloc[sample_index],
-                            show=False
-                        ).html()
-                        
-                        components.html(shap.getjs() + force_plot_html, height=400)
-                        st.success("✅ SHAP force plot created with direct model!")
-                        
-                except Exception as e2:
-                    st.warning(f"SHAP method 2 failed: {str(e2)}")
+                    st.info("💡 Trying matplotlib version...")
                     
-                    try:
-                        # 方法4：使用 matplotlib 版本
-                        if hasattr(model, 'steps'):
-                            final_model = model.steps[-1][1]
-                            explainer = shap.TreeExplainer(final_model)
-                            shap_values = explainer.shap_values(user_scaled_df)
-                        else:
-                            explainer = shap.TreeExplainer(model)
-                            shap_values = explainer.shap_values(user_scaled_df)
-                        
-                        fig, ax = plt.subplots(figsize=(12, 6))
-                        shap.force_plot(
-                            explainer.expected_value,
-                            shap_values[0, :],
-                            user_scaled_df.iloc[0].values,
-                            feature_names=['Sodium', 'Protein', 'procef_4', 'Energy'],
-                            matplotlib=True,
-                            show=False
-                        )
-                        st.pyplot(fig)
-                        plt.close()
-                        st.success("✅ SHAP force plot created with matplotlib!")
-                        
-                    except Exception as e3:
-                        st.error(f"All SHAP methods failed: {str(e3)}")
-                        st.info("💡 SHAP force plot is not available for this model type.")
+                    # 确保数据格式正确
+                    user_scaled_df_clean = user_scaled_df.copy()
+                    for col in user_scaled_df_clean.columns:
+                        user_scaled_df_clean[col] = pd.to_numeric(user_scaled_df_clean[col], errors='coerce')
+                    user_scaled_df_clean = user_scaled_df_clean.fillna(0)
+                    
+                    # 使用 TreeExplainer
+                    if hasattr(model, 'steps'):
+                        final_model = model.steps[-1][1]
+                        explainer = shap.TreeExplainer(final_model)
+                    else:
+                        explainer = shap.TreeExplainer(model)
+                    
+                    shap_values = explainer.shap_values(user_scaled_df_clean)
+                    
+                    fig, ax = plt.subplots(figsize=(12, 6))
+                    shap.force_plot(
+                        explainer.expected_value,
+                        shap_values[0, :],
+                        user_scaled_df_clean.iloc[0].values,
+                        feature_names=['Sodium', 'Protein', 'procef_4', 'Energy'],
+                        matplotlib=True,
+                        show=False
+                    )
+                    st.pyplot(fig)
+                    plt.close()
+                    st.success("✅ SHAP force plot created with matplotlib!")
+                    
+                except Exception as e2:
+                    st.error(f"All SHAP methods failed: {str(e2)}")
+                    st.info("💡 SHAP force plot is not available for this model type.")
             
             # 9. 添加建议
             st.subheader(TEXTS[lang]['recommendations'])
