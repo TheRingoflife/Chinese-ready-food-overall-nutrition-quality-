@@ -82,8 +82,8 @@ if st.sidebar.button("🧮 Predict"):
                 st.pyplot(fig)
                 plt.close()
         
-        # 5. SHAP力图 - 完全重新设计
-        st.subheader("📊 SHAP Feature Analysis")
+        # 5. SHAP力图 - 真正的力图版本
+        st.subheader("📊 SHAP Force Plot")
         
         try:
             # 创建背景数据
@@ -117,110 +117,197 @@ if st.sidebar.button("🧮 Predict"):
             with col2:
                 st.write(f"**Final prediction:** {base_val + shap_vals.sum():.4f}")
             
-            # 创建清晰的特征分析图
-            with st.expander("Click to view detailed SHAP analysis", expanded=True):
+            # 创建真正的SHAP力图
+            with st.expander("Click to view SHAP force plot", expanded=True):
                 
-                # 创建两列布局
-                col1, col2 = st.columns([3, 2])
-                
-                with col1:
-                    # 创建清晰的特征贡献图
-                    fig, ax = plt.subplots(figsize=(12, 8))
+                # 方法1：尝试修复的HTML版本
+                try:
+                    force_plot = shap.force_plot(
+                        base_val,
+                        shap_vals,
+                        user_scaled_df.iloc[0],
+                        feature_names=['Protein', 'Sodium', 'Energy', 'procef_4'],
+                        matplotlib=False,
+                        show=False  # 避免自动显示
+                    )
                     
-                    features = ['Protein', 'Sodium', 'Energy', 'procef_4']
-                    feature_values = user_scaled_df.iloc[0].values
+                    force_html = force_plot.html()
+                    components.html(shap.getjs() + force_html, height=500)
+                    st.success("✅ SHAP force plot created (HTML version)!")
                     
-                    # 按SHAP值绝对值排序
-                    sorted_indices = np.argsort(np.abs(shap_vals))[::-1]
-                    sorted_features = [features[i] for i in sorted_indices]
-                    sorted_shap_vals = shap_vals[sorted_indices]
-                    sorted_feature_vals = feature_values[sorted_indices]
+                except Exception as e:
+                    st.warning(f"HTML version failed: {e}")
                     
-                    # 创建水平条形图
-                    y_pos = np.arange(len(sorted_features))
-                    colors = ['red' if x < 0 else 'blue' for x in sorted_shap_vals]
-                    
-                    bars = ax.barh(y_pos, sorted_shap_vals, color=colors, alpha=0.7, height=0.6)
-                    
-                    # 添加特征标签和数值
-                    for i, (bar, shap_val, feature_val, feature_name) in enumerate(zip(bars, sorted_shap_vals, sorted_feature_vals, sorted_features)):
-                        width = bar.get_width()
-                        y_pos_bar = bar.get_y() + bar.get_height()/2
+                    # 方法2：自定义matplotlib力图
+                    try:
+                        # 创建两列布局
+                        col1, col2 = st.columns([3, 2])
                         
-                        # 在条形图内部显示SHAP值（如果空间足够）
-                        if abs(width) > 0.05:
-                            ax.text(width/2, y_pos_bar, 
-                                    f'{shap_val:.3f}', ha='center', va='center', 
-                                    color='white', fontweight='bold', fontsize=10)
+                        with col1:
+                            # 创建自定义的SHAP力图
+                            fig, ax = plt.subplots(figsize=(14, 6))
+                            
+                            features = ['Protein', 'Sodium', 'Energy', 'procef_4']
+                            feature_values = user_scaled_df.iloc[0].values
+                            
+                            # 按SHAP值排序（从大到小）
+                            sorted_indices = np.argsort(shap_vals)[::-1]
+                            sorted_features = [features[i] for i in sorted_indices]
+                            sorted_shap_vals = shap_vals[sorted_indices]
+                            sorted_feature_vals = feature_values[sorted_indices]
+                            
+                            # 计算累积位置
+                            cumulative_pos = np.cumsum(np.concatenate([[0], sorted_shap_vals]))
+                            
+                            # 绘制力图
+                            current_pos = base_val
+                            
+                            # 绘制基线
+                            ax.axvline(x=base_val, color='black', linestyle='-', linewidth=2, alpha=0.7)
+                            ax.text(base_val, 0.5, f'Base: {base_val:.3f}', 
+                                   ha='center', va='center', fontsize=10, 
+                                   bbox=dict(boxstyle="round,pad=0.3", facecolor="yellow", alpha=0.7))
+                            
+                            # 绘制每个特征的贡献
+                            for i, (feature, shap_val, feature_val) in enumerate(zip(sorted_features, sorted_shap_vals, sorted_feature_vals)):
+                                start_pos = current_pos
+                                end_pos = current_pos + shap_val
+                                
+                                # 选择颜色
+                                color = 'red' if shap_val < 0 else 'blue'
+                                
+                                # 绘制矩形
+                                rect_height = 0.3
+                                rect = plt.Rectangle((min(start_pos, end_pos), 0.1), 
+                                                   abs(shap_val), rect_height, 
+                                                   facecolor=color, alpha=0.7, edgecolor='black', linewidth=1)
+                                ax.add_patch(rect)
+                                
+                                # 添加特征标签
+                                label_x = (start_pos + end_pos) / 2
+                                label_y = 0.25 + rect_height
+                                
+                                # 特征名称
+                                ax.text(label_x, label_y, feature, 
+                                       ha='center', va='bottom', fontsize=10, fontweight='bold',
+                                       bbox=dict(boxstyle="round,pad=0.2", facecolor="white", alpha=0.9))
+                                
+                                # SHAP值
+                                ax.text(label_x, label_y - 0.1, f'{shap_val:.3f}', 
+                                       ha='center', va='top', fontsize=9,
+                                       bbox=dict(boxstyle="round,pad=0.1", facecolor=color, alpha=0.3))
+                                
+                                # 特征值
+                                ax.text(label_x, label_y - 0.2, f'Val: {feature_val:.2f}', 
+                                       ha='center', va='top', fontsize=8,
+                                       bbox=dict(boxstyle="round,pad=0.1", facecolor="lightgray", alpha=0.7))
+                                
+                                current_pos = end_pos
+                            
+                            # 绘制最终预测线
+                            final_pred = base_val + shap_vals.sum()
+                            ax.axvline(x=final_pred, color='green', linestyle='--', linewidth=2, alpha=0.7)
+                            ax.text(final_pred, 0.8, f'Final: {final_pred:.3f}', 
+                                   ha='center', va='center', fontsize=10, 
+                                   bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgreen", alpha=0.7))
+                            
+                            # 设置图表属性
+                            ax.set_xlim(min(base_val, final_pred) - 0.2, max(base_val, final_pred) + 0.2)
+                            ax.set_ylim(0, 1)
+                            ax.set_xlabel('Prediction Value', fontsize=12)
+                            ax.set_title('SHAP Force Plot - Feature Contributions', fontsize=14, pad=20)
+                            ax.grid(True, alpha=0.3, axis='x')
+                            
+                            # 添加图例
+                            legend_elements = [
+                                plt.Rectangle((0,0),1,1, facecolor='blue', alpha=0.7, label='Positive Impact'),
+                                plt.Rectangle((0,0),1,1, facecolor='red', alpha=0.7, label='Negative Impact'),
+                                plt.Line2D([0],[0], color='black', linewidth=2, label='Base Value'),
+                                plt.Line2D([0],[0], color='green', linewidth=2, linestyle='--', label='Final Prediction')
+                            ]
+                            ax.legend(handles=legend_elements, loc='upper right', fontsize=9)
+                            
+                            # 隐藏y轴
+                            ax.set_yticks([])
+                            ax.set_ylabel('')
+                            
+                            plt.tight_layout()
+                            st.pyplot(fig)
+                            plt.close()
                         
-                        # 在条形图右侧显示详细信息
-                        if width > 0:
-                            text_x = width + 0.02
-                            ha = 'left'
-                        else:
-                            text_x = width - 0.02
-                            ha = 'right'
+                        with col2:
+                            # 详细信息表格
+                            st.subheader("📋 Feature Details")
+                            
+                            detail_df = pd.DataFrame({
+                                'Feature': sorted_features,
+                                'SHAP Value': [f'{x:.4f}' for x in sorted_shap_vals],
+                                'Feature Value': [f'{x:.3f}' for x in sorted_feature_vals],
+                                'Impact': ['🔴 Negative' if x < 0 else '🔵 Positive' for x in sorted_shap_vals],
+                                'Cumulative': [f'{base_val + np.sum(sorted_shap_vals[:i+1]):.4f}' for i in range(len(sorted_shap_vals))]
+                            })
+                            
+                            st.dataframe(detail_df, use_container_width=True)
+                            
+                            # 添加解释说明
+                            st.markdown("**📖 力图说明：**")
+                            st.markdown("- 🔵 **蓝色矩形**：正向影响")
+                            st.markdown("- 🔴 **红色矩形**：负向影响")
+                            st.markdown("- **黑色线**：基准值")
+                            st.markdown("- **绿色虚线**：最终预测")
+                            st.markdown("- **矩形宽度**：影响大小")
+                            st.markdown("- **矩形位置**：累积效果")
                         
-                        # 显示特征名称和值
-                        ax.text(text_x, y_pos_bar, 
-                                f'{feature_name}: {feature_val:.2f}', 
-                                ha=ha, va='center', fontsize=10,
-                                bbox=dict(boxstyle="round,pad=0.3", facecolor="white", 
-                                        alpha=0.9, edgecolor="gray", linewidth=0.5))
-                    
-                    # 设置y轴标签
-                    ax.set_yticks(y_pos)
-                    ax.set_yticklabels(sorted_features)
-                    
-                    # 添加零线
-                    ax.axvline(x=0, color='black', linestyle='-', alpha=0.5, linewidth=1)
-                    
-                    # 设置标题和标签
-                    ax.set_xlabel('SHAP Value (Feature Contribution)', fontsize=12)
-                    ax.set_title('SHAP Feature Contributions\n(Features sorted by impact)', fontsize=14, pad=20)
-                    ax.grid(True, alpha=0.3, axis='x')
-                    
-                    # 添加图例
-                    legend_elements = [
-                        plt.Rectangle((0,0),1,1, facecolor='blue', alpha=0.7, label='Positive Impact (Increases Health)'),
-                        plt.Rectangle((0,0),1,1, facecolor='red', alpha=0.7, label='Negative Impact (Decreases Health)')
-                    ]
-                    ax.legend(handles=legend_elements, loc='upper right', fontsize=10)
-                    
-                    plt.tight_layout()
-                    st.pyplot(fig)
-                    plt.close()
-                
-                with col2:
-                    # 详细信息表格
-                    st.subheader("📋 Feature Details")
-                    
-                    # 创建详细信息表格
-                    detail_df = pd.DataFrame({
-                        'Feature': sorted_features,
-                        'SHAP Value': [f'{x:.4f}' for x in sorted_shap_vals],
-                        'Feature Value': [f'{x:.3f}' for x in sorted_feature_vals],
-                        'Impact': ['🔴 Negative' if x < 0 else '🔵 Positive' for x in sorted_shap_vals],
-                        'Magnitude': [f'{abs(x):.4f}' for x in sorted_shap_vals]
-                    })
-                    
-                    st.dataframe(detail_df, use_container_width=True)
-                    
-                    # 添加解释说明
-                    st.markdown("**📖 图例说明：**")
-                    st.markdown("- 🔵 **蓝色**：正向影响（增加健康性）")
-                    st.markdown("- 🔴 **红色**：负向影响（降低健康性）")
-                    st.markdown("- **数值越大**：影响越强")
-                    st.markdown("- **排序**：按影响强度从大到小排列")
-                    
-                    # 添加特征含义说明
-                    st.markdown("**🔍 特征含义：**")
-                    st.markdown("- **Protein**：蛋白质含量 (g/100g)")
-                    st.markdown("- **Sodium**：钠含量 (mg/100g)")
-                    st.markdown("- **Energy**：能量 (kJ/100g)")
-                    st.markdown("- **procef_4**：是否超加工 (0=否, 1=是)")
-                
-                st.success("✅ SHAP analysis completed successfully!")
+                        st.success("✅ SHAP force plot created (Custom version)!")
+                        
+                    except Exception as e2:
+                        st.error(f"Custom force plot failed: {e2}")
+                        
+                        # 方法3：简化的力图
+                        st.subheader("📊 Simplified Force Plot")
+                        
+                        fig, ax = plt.subplots(figsize=(12, 4))
+                        
+                        # 创建简化的力图
+                        features = ['Protein', 'Sodium', 'Energy', 'procef_4']
+                        feature_values = user_scaled_df.iloc[0].values
+                        
+                        # 绘制水平条形图作为力图
+                        y_pos = np.arange(len(features))
+                        colors = ['red' if x < 0 else 'blue' for x in shap_vals]
+                        
+                        bars = ax.barh(y_pos, shap_vals, color=colors, alpha=0.7)
+                        
+                        # 添加特征标签
+                        for i, (bar, shap_val, feature_val, feature) in enumerate(zip(bars, shap_vals, feature_values, features)):
+                            width = bar.get_width()
+                            y_pos_bar = bar.get_y() + bar.get_height()/2
+                            
+                            # 特征名称
+                            ax.text(0, y_pos_bar, feature, ha='right', va='center', fontsize=10, fontweight='bold')
+                            
+                            # SHAP值
+                            if width > 0:
+                                ax.text(width + 0.01, y_pos_bar, f'{shap_val:.3f}', ha='left', va='center')
+                            else:
+                                ax.text(width - 0.01, y_pos_bar, f'{shap_val:.3f}', ha='right', va='center')
+                            
+                            # 特征值
+                            ax.text(width/2, y_pos_bar, f'Val: {feature_val:.2f}', ha='center', va='center', 
+                                   color='white', fontweight='bold', fontsize=9)
+                        
+                        ax.axvline(x=0, color='black', linestyle='-', alpha=0.5)
+                        ax.set_yticks(y_pos)
+                        ax.set_yticklabels(features)
+                        ax.set_xlabel('SHAP Value')
+                        ax.set_title('Feature Contributions (Force Plot Style)')
+                        ax.grid(True, alpha=0.3, axis='x')
+                        
+                        plt.tight_layout()
+                        st.pyplot(fig)
+                        plt.close()
+                        
+                        st.info("💡 Simplified force plot displayed")
             
         except Exception as e:
             st.error(f"SHAP analysis failed: {e}")
