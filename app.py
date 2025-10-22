@@ -58,7 +58,8 @@ TEXTS = {
         "unhealthy_class": "Unhealthy: Model prediction = 0",
         "based_on": "Based on nutritional features",
         "shap_explanation": "🔬 SHAP Force Plot",
-        "footer": "Developed using Streamlit and XGBoost · For research use only."
+        "footer": "Developed using Streamlit and XGBoost · For research use only.",
+        "please_input": "Please input values for all fields to make a prediction"
     },
     "zh": {
         "title": "🍱 即食食品营养健康度预测器",
@@ -101,7 +102,8 @@ TEXTS = {
         "unhealthy_class": "不健康：模型预测 = 0",
         "based_on": "基于营养特征",
         "shap_explanation": "🔬 SHAP力图",
-        "footer": "使用Streamlit和XGBoost开发 · 仅供研究使用。"
+        "footer": "使用Streamlit和XGBoost开发 · 仅供研究使用。",
+        "please_input": "请输入所有字段的值以进行预测"
     }
 }
 
@@ -174,92 +176,74 @@ st.info(f"📊 Background data shape: {background_data.shape}")
 
 # ===== 侧边栏输入 =====
 st.sidebar.header(TEXTS[lang]['input_title'])
-sodium = st.sidebar.number_input(TEXTS[lang]['sodium_label'], min_value=0.0, step=1.0, value=400.0)
-protein = st.sidebar.number_input(TEXTS[lang]['protein_label'], min_value=0.0, step=0.1, value=15.0)
+
+# 移除所有初始值，让用户手动输入
+sodium = st.sidebar.number_input(TEXTS[lang]['sodium_label'], min_value=0.0, step=1.0)
+protein = st.sidebar.number_input(TEXTS[lang]['protein_label'], min_value=0.0, step=0.1)
 procef_4 = st.sidebar.selectbox(TEXTS[lang]['procef_4_label'], [0, 1])
-energy = st.sidebar.number_input(TEXTS[lang]['energy_label'], min_value=0.0, step=1.0, value=1000.0)
+energy = st.sidebar.number_input(TEXTS[lang]['energy_label'], min_value=0.0, step=1.0)
 
 # ===== 模型预测 =====
 if st.sidebar.button(TEXTS[lang]['predict_button']):
-    try:
-        # 1. 准备输入数据（4个特征）
-        input_data = np.array([[sodium, protein, procef_4, energy]])
-        
-        # 2. 标准化
-        input_scaled = scaler.transform(input_data)
-        
-        # 3. 创建DataFrame
-        user_scaled_df = pd.DataFrame(input_scaled, columns=['Sodium', 'Protein', 'procef_4', 'Energy'])
-        
-        # 4. 预测
-        prediction = model.predict(user_scaled_df)[0]
-        prob = model.predict_proba(user_scaled_df)[0][1]
-        
-        # 5. 展示结果
-        st.subheader(TEXTS[lang]['prediction_title'])
-        label = TEXTS[lang]['healthy'] if prediction == 1 else TEXTS[lang]['unhealthy']
-        st.markdown(f"**Prediction:** {label}")
-        st.markdown(f"**{TEXTS[lang]['confidence']}:** `{prob:.2f}`")
-        
-        # 6. 特征重要性（如果模型支持）
-        if hasattr(model, 'feature_importances_'):
-            st.subheader(TEXTS[lang]['feature_importance'])
-            feature_importance = model.feature_importances_
-            features = ['Sodium', 'Protein', 'procef_4', 'Energy']
-            
-            # 创建重要性图表
-            fig, ax = plt.subplots(figsize=(10, 6))
-            bars = ax.barh(features, feature_importance)
-            ax.set_xlabel('Importance')
-            ax.set_title('Feature Importance')
-            
-            # 添加数值标签
-            for i, bar in enumerate(bars):
-                width = bar.get_width()
-                ax.text(width, bar.get_y() + bar.get_height()/2, 
-                        f'{width:.3f}', ha='left', va='center')
-            
-            st.pyplot(fig)
-        
-        # 7. 特征影响分析
-        st.subheader(TEXTS[lang]['feature_impact'])
-        feature_impact = pd.DataFrame({
-            'Feature': ['Sodium', 'Protein', 'procef_4', 'Energy'],
-            'Input Value': input_data[0],
-            'Normalized Value': input_scaled[0]
-        })
-        
-        st.dataframe(feature_impact, use_container_width=True)
-        
-        # 8. SHAP力图
-        st.subheader(TEXTS[lang]['shap_explanation'])
-        
+    # 检查是否所有字段都已输入
+    if sodium == 0 and protein == 0 and energy == 0:
+        st.warning(f"⚠️ {TEXTS[lang]['please_input']}")
+    else:
         try:
-            # 检查模型类型
-            if hasattr(model, 'steps'):  # 如果是 Pipeline
-                # 获取 Pipeline 中的最终模型
-                final_model = model.named_steps[list(model.named_steps.keys())[-1]]
-                input_transformed = model[:-1].transform(input_data)
+            # 1. 准备输入数据（4个特征）
+            input_data = np.array([[sodium, protein, procef_4, energy]])
+            
+            # 2. 标准化
+            input_scaled = scaler.transform(input_data)
+            
+            # 3. 创建DataFrame
+            user_scaled_df = pd.DataFrame(input_scaled, columns=['Sodium', 'Protein', 'procef_4', 'Energy'])
+            
+            # 4. 预测
+            prediction = model.predict(user_scaled_df)[0]
+            prob = model.predict_proba(user_scaled_df)[0][1]
+            
+            # 5. 展示结果
+            st.subheader(TEXTS[lang]['prediction_title'])
+            label = TEXTS[lang]['healthy'] if prediction == 1 else TEXTS[lang]['unhealthy']
+            st.markdown(f"**Prediction:** {label}")
+            st.markdown(f"**{TEXTS[lang]['confidence']}:** `{prob:.2f}`")
+            
+            # 6. 特征重要性（如果模型支持）
+            if hasattr(model, 'feature_importances_'):
+                st.subheader(TEXTS[lang]['feature_importance'])
+                feature_importance = model.feature_importances_
+                features = ['Sodium', 'Protein', 'procef_4', 'Energy']
                 
-                # 使用 TreeExplainer
-                explainer = shap.TreeExplainer(final_model)
-                shap_values = explainer.shap_values(input_transformed)
+                # 创建重要性图表
+                fig, ax = plt.subplots(figsize=(10, 6))
+                bars = ax.barh(features, feature_importance)
+                ax.set_xlabel('Importance')
+                ax.set_title('Feature Importance')
                 
-                # 创建力图
-                fig, ax = plt.subplots(figsize=(12, 6))
-                shap.force_plot(
-                    explainer.expected_value,
-                    shap_values[0],
-                    input_transformed[0],
-                    feature_names=['Sodium', 'Protein', 'procef_4', 'Energy'],
-                    matplotlib=True,
-                    show=False
-                )
+                # 添加数值标签
+                for i, bar in enumerate(bars):
+                    width = bar.get_width()
+                    ax.text(width, bar.get_y() + bar.get_height()/2, 
+                            f'{width:.3f}', ha='left', va='center')
+                
                 st.pyplot(fig)
-                plt.close()
-                
-            else:  # 如果是普通模型
-                # 使用 TreeExplainer
+            
+            # 7. 特征影响分析
+            st.subheader(TEXTS[lang]['feature_impact'])
+            feature_impact = pd.DataFrame({
+                'Feature': ['Sodium', 'Protein', 'procef_4', 'Energy'],
+                'Input Value': input_data[0],
+                'Normalized Value': input_scaled[0]
+            })
+            
+            st.dataframe(feature_impact, use_container_width=True)
+            
+            # 8. SHAP力图
+            st.subheader(TEXTS[lang]['shap_explanation'])
+            
+            try:
+                # 直接使用 TreeExplainer
                 explainer = shap.TreeExplainer(model)
                 shap_values = explainer.shap_values(input_scaled)
                 
@@ -276,29 +260,50 @@ if st.sidebar.button(TEXTS[lang]['predict_button']):
                 st.pyplot(fig)
                 plt.close()
                 
-        except Exception as e:
-            st.warning(f"SHAP force plot error: {str(e)}")
-            st.info("💡 Tip: This might be due to Pipeline model structure. SHAP force plot may not be available for this model type.")
-        
-        # 9. 添加建议
-        st.subheader(TEXTS[lang]['recommendations'])
-        if prediction == 0:  # Unhealthy
-            st.warning(f"**{TEXTS[lang]['unhealthy_recommendations']}**")
-            if sodium > 400:
-                st.write(f"• {TEXTS[lang]['reduce_sodium']} (current: {sodium:.0f}mg/100g)")
-            if energy > 1000:
-                st.write(f"• {TEXTS[lang]['lower_energy']} (current: {energy:.0f}kJ/100g)")
-            if protein < 10:
-                st.write(f"• {TEXTS[lang]['increase_protein']} (current: {protein:.1f}g/100g)")
-            if procef_4 == 1:
-                st.write(f"• {TEXTS[lang]['less_processed']}")
-        else:  # Healthy
-            st.success(f"**{TEXTS[lang]['healthy_recommendations']}**")
-            st.write(TEXTS[lang]['keep_good_choices'])
+            except Exception as e:
+                st.warning(f"SHAP force plot error: {str(e)}")
+                st.info("💡 Trying alternative method...")
+                
+                # 备用方法：使用 Explainer
+                try:
+                    explainer = shap.Explainer(model)
+                    shap_values = explainer(input_scaled)
+                    
+                    fig, ax = plt.subplots(figsize=(12, 6))
+                    shap.force_plot(
+                        explainer.expected_value,
+                        shap_values.values[0],
+                        input_scaled[0],
+                        feature_names=['Sodium', 'Protein', 'procef_4', 'Energy'],
+                        matplotlib=True,
+                        show=False
+                    )
+                    st.pyplot(fig)
+                    plt.close()
+                    
+                except Exception as e2:
+                    st.error(f"SHAP not available: {str(e2)}")
+                    st.info("💡 SHAP force plot is not available for this model type.")
             
-    except Exception as e:
-        st.error(f"❌ Prediction failed: {e}")
-        st.write("Please check your input data and try again.")
+            # 9. 添加建议
+            st.subheader(TEXTS[lang]['recommendations'])
+            if prediction == 0:  # Unhealthy
+                st.warning(f"**{TEXTS[lang]['unhealthy_recommendations']}**")
+                if sodium > 400:
+                    st.write(f"• {TEXTS[lang]['reduce_sodium']} (current: {sodium:.0f}mg/100g)")
+                if energy > 1000:
+                    st.write(f"• {TEXTS[lang]['lower_energy']} (current: {energy:.0f}kJ/100g)")
+                if protein < 10:
+                    st.write(f"• {TEXTS[lang]['increase_protein']} (current: {protein:.1f}g/100g)")
+                if procef_4 == 1:
+                    st.write(f"• {TEXTS[lang]['less_processed']}")
+            else:  # Healthy
+                st.success(f"**{TEXTS[lang]['healthy_recommendations']}**")
+                st.write(TEXTS[lang]['keep_good_choices'])
+                
+        except Exception as e:
+            st.error(f"❌ Prediction failed: {e}")
+            st.write("Please check your input data and try again.")
 
 # ===== 添加信息面板 =====
 st.markdown("---")
