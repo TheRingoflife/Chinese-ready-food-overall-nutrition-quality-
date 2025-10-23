@@ -438,7 +438,6 @@
 # </div>
 # """, unsafe_allow_html=True)
 
-
 import streamlit as st
 import numpy as np
 import pandas as pd
@@ -571,15 +570,13 @@ def get_language():
 current_lang = get_language()
 texts = TEXTS[LANGUAGES[current_lang]]
 
-# 自定义CSS
+# 自定义CSS - 保留原有卡片样式
 st.markdown("""
 <style>
 .main-header {
     font-size: 2.5rem;
     font-weight: bold;
-    background: linear-gradient(90deg, #2E8B57, #32CD32);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    color: #2E8B57;
     text-align: center;
     margin-bottom: 1rem;
 }
@@ -592,29 +589,19 @@ st.markdown("""
 }
 
 .prediction-healthy {
-    background: linear-gradient(135deg, #d4edda, #c3e6cb);
+    background-color: #d4edda;
     color: #155724;
-    padding: 1.5rem;
-    border-radius: 1rem;
-    border: 2px solid #c3e6cb;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    padding: 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid #c3e6cb;
 }
 
 .prediction-unhealthy {
-    background: linear-gradient(135deg, #f8d7da, #f5c6cb);
+    background-color: #f8d7da;
     color: #721c24;
-    padding: 1.5rem;
-    border-radius: 1rem;
-    border: 2px solid #f5c6cb;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-}
-
-.metric-card {
-    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
     padding: 1rem;
     border-radius: 0.5rem;
-    border: 1px solid #dee2e6;
-    text-align: center;
+    border: 1px solid #f5c6cb;
 }
 
 .sidebar .stSelectbox > div > div {
@@ -765,7 +752,7 @@ if st.sidebar.button(f"🧮 {texts['predict']}", type="primary", use_container_w
             prediction = model.predict(user_scaled_df)[0]
             probabilities = model.predict_proba(user_scaled_df)[0]
             
-            # 展示结果
+            # 展示结果 - 保留原有卡片样式
             st.subheader("🔍 Prediction Result")
             
             col1, col2, col3 = st.columns(3)
