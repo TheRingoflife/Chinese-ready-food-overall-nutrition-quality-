@@ -26,8 +26,8 @@ LANGUAGES = {
 TEXTS = {
     "en": {
         "title": "🍱 Nutritional Quality Classifier",
-        "subtitle": "ML-Powered Ready Food Health Assessment",
-        "description": "This advanced machine learning application uses XGBoost to predict the nutritional healthiness of ready foods based on key nutritional features.",
+        "subtitle": "ML-Powered Ready-to-Eat Food Health Assessment",
+        "description": "This advanced machine learning application uses XGBoost to predict the nutritional healthiness of ready-to-eat foods based on key nutritional features.",
         "target_audience": "🎯 Target Audience",
         "audience_desc": "Designed for countries with limited nutritional information and consumers seeking quick, reliable food health assessments.",
         "problem_statement": "📊 Problem Statement",
@@ -70,8 +70,8 @@ TEXTS = {
     },
     "zh": {
         "title": "🍱 营养质量分类器",
-        "subtitle": "ML驱动的预制食品健康评估",
-        "description": "这个先进的机器学习应用程序使用XGBoost根据关键营养特征预测预制食品的营养健康性。",
+        "subtitle": "ML驱动的即食食品健康评估",
+        "description": "这个先进的机器学习应用程序使用XGBoost根据关键营养特征预测即食食品的营养健康性。",
         "target_audience": "🎯 目标用户",
         "audience_desc": "专为营养信息有限的国家和寻求快速、可靠食品健康评估的消费者设计。",
         "problem_statement": "📊 问题陈述",
@@ -262,8 +262,30 @@ if st.sidebar.button(texts['predict_button'], type="primary", use_container_widt
         </div>
         """, unsafe_allow_html=True)
         
+        # 4. 特征重要性
+        st.markdown(f"## {texts['feature_importance']}")
         
-        # 4. SHAP力图
+        if hasattr(model, 'steps'):
+            final_model = model.steps[-1][1]
+            if hasattr(final_model, 'feature_importances_'):
+                feature_importance = final_model.feature_importances_
+                features = texts['chart_feature_names']  # 使用英文特征名用于图表
+                
+                fig, ax = plt.subplots(figsize=(10, 6))
+                bars = ax.barh(features, feature_importance, color=['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4'])
+                ax.set_xlabel('Importance', fontsize=12)
+                ax.set_title('Feature Importance Analysis', fontsize=14, fontweight='bold')
+                
+                for i, bar in enumerate(bars):
+                    width = bar.get_width()
+                    ax.text(width, bar.get_y() + bar.get_height()/2, 
+                            f'{width:.3f}', ha='left', va='center', fontweight='bold')
+                
+                plt.tight_layout()
+                st.pyplot(fig)
+                plt.close()
+        
+        # 5. SHAP力图
         st.markdown(f"## {texts['shap_plot']}")
         
         try:
