@@ -65,8 +65,7 @@ TEXTS = {
         "shap_failed": "SHAP analysis failed",
         "shap_unavailable": "💡 SHAP explanation is not available, but feature importance is shown above.",
         "footer": "Developed using Streamlit and XGBoost · For research use only.",
-        "feature_names": ["Protein", "Sodium", "Energy", "procef_4"],
-        "chart_feature_names": ["Protein", "Sodium", "Energy", "procef_4"]  # 图表用英文
+        "feature_names": ["Protein", "Sodium", "Energy", "procef_4"]
     },
     "zh": {
         "title": "🍱 营养质量分类器",
@@ -93,7 +92,7 @@ TEXTS = {
         "feature_importance": "📊 特征重要性",
         "shap_plot": "📊 SHAP力图",
         "base_value": "基准值",
-        "final_prediction": "最终预测",
+        "final预测": "最终预测",
         "expand_shap": "点击查看SHAP力图",
         "shap_success": "✅ SHAP力图创建成功 (Matplotlib版本)!",
         "shap_html_success": "✅ SHAP力图创建成功 (HTML版本 - 备用)!",
@@ -109,8 +108,7 @@ TEXTS = {
         "shap_failed": "SHAP分析失败",
         "shap_unavailable": "💡 SHAP解释不可用，但上面显示了特征重要性。",
         "footer": "使用Streamlit和XGBoost开发 · 仅供研究使用。",
-        "feature_names": ["蛋白质", "钠", "能量", "procef_4"],
-        "chart_feature_names": ["Protein", "Sodium", "Energy", "procef_4"]  # 图表用英文
+        "feature_names": ["蛋白质", "钠", "能量", "procef_4"]
     }
 }
 
@@ -236,7 +234,7 @@ if st.sidebar.button(texts['predict_button'], type="primary", use_container_widt
         # 1. 准备输入数据
         input_data = np.array([[protein, sodium, energy, procef_4]], dtype=float)
         input_scaled = scaler.transform(input_data)
-        user_scaled_df = pd.DataFrame(input_scaled, columns=texts['chart_feature_names'])  # 使用英文特征名用于数据处理
+        user_scaled_df = pd.DataFrame(input_scaled, columns=texts['feature_names'])
         
         # 2. 预测
         prediction = model.predict(user_scaled_df)[0]
@@ -269,7 +267,7 @@ if st.sidebar.button(texts['predict_button'], type="primary", use_container_widt
             final_model = model.steps[-1][1]
             if hasattr(final_model, 'feature_importances_'):
                 feature_importance = final_model.feature_importances_
-                features = texts['chart_feature_names']  # 使用英文特征名用于图表
+                features = texts['feature_names']
                 
                 fig, ax = plt.subplots(figsize=(10, 6))
                 bars = ax.barh(features, feature_importance, color=['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4'])
@@ -330,7 +328,7 @@ if st.sidebar.button(texts['predict_button'], type="primary", use_container_widt
                     # 创建SHAP力图，确保包含特征名称
                     shap.force_plot(base_val, shap_vals,
                                    user_scaled_df.iloc[0], 
-                                   feature_names=texts['chart_feature_names'],  # 使用英文特征名称
+                                   feature_names=texts['feature_names'],  # 使用多语言特征名称
                                    matplotlib=True, show=False)
                     
                     plt.title('SHAP Force Plot - Current Prediction', fontsize=16, fontweight='bold', pad=30)
@@ -348,7 +346,7 @@ if st.sidebar.button(texts['predict_button'], type="primary", use_container_widt
                             base_val,
                             shap_vals,
                             user_scaled_df.iloc[0],
-                            feature_names=texts['chart_feature_names'],  # 使用英文特征名称
+                            feature_names=texts['feature_names'],
                             matplotlib=False
                         )
                         
@@ -364,7 +362,7 @@ if st.sidebar.button(texts['predict_button'], type="primary", use_container_widt
                         try:
                             fig, ax = plt.subplots(figsize=(15, 8))
                             
-                            features = texts['chart_feature_names']  # 使用英文特征名称
+                            features = texts['feature_names']
                             feature_values = user_scaled_df.iloc[0].values
                             
                             # 创建条形图
